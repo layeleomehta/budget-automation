@@ -118,6 +118,27 @@ export const formatSheet = async (env: Env) => {
   return result;
 };
 
+export const monthBreakdown = async ({ env, month }: { env: Env; month: string }) => {
+  const ledger = parseLedgerRows(await sheetsClient(env).getValues(`${TRANSACTIONS_SHEET}!A2:L`));
+  const rows = ledger.filter((row) => row.date.startsWith(month));
+  const totals: Record<string, number> = {};
+  for (const row of rows) {
+    totals[row.category] = Math.round(((totals[row.category] ?? 0) + row.amount) * 100) / 100;
+  }
+  return {
+    rows: rows.map(({ account, amount, category, date, description, merchant, status }) => ({
+      account,
+      amount,
+      category,
+      date,
+      description,
+      merchant,
+      status,
+    })),
+    totals,
+  };
+};
+
 export const redateTransactions = async ({
   env,
   from,

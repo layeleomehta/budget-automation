@@ -14,19 +14,30 @@ const MONTH_VIEW_LIST_HEADERS = ['Date', 'Account', 'Merchant', 'Amount', 'Categ
 const ALL = 'All';
 const REVIEW_OPTIONS = [ALL, 'Needs review', 'Reviewed'];
 const STATUS_OPTIONS = [ALL, 'Posted', 'Pending'];
-const MONTHS_HELPER_COLUMN = 'L';
-const MONTH_START_FORMULA = '=IF(ISNUMBER(B1),DATE(YEAR(B1),MONTH(B1),1),DATEVALUE(B1&"-01"))';
+const FILTER_LABEL_COLUMN = 11;
+const FILTER_VALUE_COLUMN = 12;
+const FILTERS = ['Month', 'Category', 'Account', 'Review', 'Status'] as const;
+const filterCell = (filter: (typeof FILTERS)[number]) => `$M$${FILTERS.indexOf(filter) + 2}`;
+const MONTHS_HELPER = { column: 'O', index: 14 };
+const ACCOUNTS_HELPER = { column: 'P', index: 15 };
+const MONTH = filterCell('Month');
+const MONTH_START_FORMULA = `=IF(ISNUMBER(${MONTH}),DATE(YEAR(${MONTH}),MONTH(${MONTH}),1),DATEVALUE(${MONTH}&"-01"))`;
 
 const monthViewListFormula = () => {
   const t = TRANSACTIONS_SHEET;
+  const category = filterCell('Category');
+  const account = filterCell('Account');
+  const review = filterCell('Review');
+  const status = filterCell('Status');
   const columns = ['A', 'B', 'C', 'E', 'F', 'G', 'H'].map((column) => `${t}!${column}:${column}`).join(',');
   const conditions = [
     `ISNUMBER(${t}!A:A)`,
     `${t}!A:A>=$B$2`,
     `${t}!A:A<EDATE($B$2,1)`,
-    `($E$1="${ALL}")+(${t}!F:F=$E$1)`,
-    `($G$1="${ALL}")+(($G$1="Needs review")*(${t}!G:G=TRUE))+(($G$1="Reviewed")*(${t}!G:G<>TRUE))`,
-    `($I$1="${ALL}")+(${t}!H:H=$I$1)`,
+    `(${category}="${ALL}")+(${t}!F:F=${category})`,
+    `(${account}="${ALL}")+(${t}!B:B=${account})`,
+    `(${review}="${ALL}")+((${review}="Needs review")*(${t}!G:G=TRUE))+((${review}="Reviewed")*(${t}!G:G<>TRUE))`,
+    `(${status}="${ALL}")+(${t}!H:H=${status})`,
   ].join(',');
   return `=IFERROR(SORT(FILTER({${columns}},${conditions}),1,FALSE),"No transactions")`;
 };
@@ -34,9 +45,23 @@ const monthViewListFormula = () => {
 const monthsHelperFormula = () =>
   `=SORT(UNIQUE(FILTER(TEXT(${TRANSACTIONS_SHEET}!A:A,"yyyy-mm"),ISNUMBER(${TRANSACTIONS_SHEET}!A:A))),1,FALSE)`;
 
-const dropdown = ({ column, options, sheetId }: { column: number; options: string[]; sheetId: number }) => ({
+const accountsHelperFormula = () =>
+  `={"${ALL}";SORT(UNIQUE(FILTER(${TRANSACTIONS_SHEET}!B:B,ISNUMBER(${TRANSACTIONS_SHEET}!A:A))))}`;
+
+const cellRange = ({ column, row, sheetId }: { column: number; row: number; sheetId: number }) => ({
+  endColumnIndex: column + 1,
+  endRowIndex: row + 1,
+  sheetId,
+  startColumnIndex: column,
+  startRowIndex: row,
+});
+
+const filterValueRange = ({ filter, sheetId }: { filter: (typeof FILTERS)[number]; sheetId: number }) =>
+  cellRange({ column: FILTER_VALUE_COLUMN, row: FILTERS.indexOf(filter) + 1, sheetId });
+
+const listDropdown = ({ filter, options, sheetId }: { filter: (typeof FILTERS)[number]; options: string[]; sheetId: number }) => ({
   setDataValidation: {
-    range: { endColumnIndex: column + 1, endRowIndex: 1, sheetId, startColumnIndex: column, startRowIndex: 0 },
+    range: filterValueRange({ filter, sheetId }),
     rule: {
       condition: { type: 'ONE_OF_LIST', values: options.map((option) => ({ userEnteredValue: option })) },
       showCustomUi: true,
@@ -45,49 +70,80 @@ const dropdown = ({ column, options, sheetId }: { column: number; options: strin
   },
 });
 
+const rangeDropdown = ({ filter, helperColumn, sheetId }: { filter: (typeof FILTERS)[number]; helperColumn: string; sheetId: number }) => ({
+  setDataValidation: {
+    range: filterValueRange({ filter, sheetId }),
+    rule: {
+      condition: { type: 'ONE_OF_RANGE', values: [{ userEnteredValue: `='${MONTH_VIEW_SHEET}'!$${helperColumn}$2:$${helperColumn}` }] },
+      showCustomUi: true,
+      strict: false,
+    },
+  },
+});
+
+const columnProperties = ({ hidden, index, pixelSize, sheetId }: { hidden?: boolean; index: number; pixelSize?: number; sheetId: number }) => ({
+  updateDimensionProperties: {
+    fields: [pixelSize === undefined ? null : 'pixelSize', hidden === undefined ? null : 'hiddenByUser'].filter(Boolean).join(','),
+    properties: { ...(hidden === undefined ? {} : { hiddenByUser: hidden }), ...(pixelSize === undefined ? {} : { pixelSize }) },
+    range: { dimension: 'COLUMNS', endIndex: index + 1, sheetId, startIndex: index },
+  },
+});
+
 export const setUpMonthViewControls = async ({ sheetId, sheets }: { sheetId: number; sheets: SheetsClient }) => {
   const currentMonth = new Date().toISOString().slice(0, 7);
-  await sheets.updateValues({
-    data: [{ range: `'${MONTH_VIEW_SHEET}'!A1:I1`, values: [['Month', currentMonth, '', 'Category', ALL, 'Review', ALL, 'Status', ALL]] }],
-    valueInputOption: 'RAW',
-  });
-  await sheets.updateValues({
-    data: [
-      { range: `'${MONTH_VIEW_SHEET}'!A2:B2`, values: [['Start', MONTH_START_FORMULA]] },
-      { range: `'${MONTH_VIEW_SHEET}'!D4:J4`, values: [MONTH_VIEW_LIST_HEADERS] },
-      { range: MONTH_VIEW_LIST_RANGE, values: [[monthViewListFormula()]] },
-      { range: `'${MONTH_VIEW_SHEET}'!${MONTHS_HELPER_COLUMN}5`, values: [[monthsHelperFormula()]] },
-    ],
-    valueInputOption: 'USER_ENTERED',
-  });
-  const helperColumnIndex = MONTHS_HELPER_COLUMN.charCodeAt(0) - 'A'.charCodeAt(0);
-  const controlCells = [1, 4, 6, 8];
   await sheets.batchUpdate([
+    { setDataValidation: { range: { endColumnIndex: 16, endRowIndex: 1, sheetId, startColumnIndex: 0, startRowIndex: 0 } } },
+    {
+      repeatCell: {
+        cell: { userEnteredFormat: {} },
+        fields: 'userEnteredFormat(backgroundColor,numberFormat)',
+        range: { endColumnIndex: 16, endRowIndex: 1, sheetId, startColumnIndex: 0, startRowIndex: 0 },
+      },
+    },
     {
       repeatCell: {
         cell: { userEnteredFormat: { numberFormat: { pattern: '@', type: 'TEXT' } } },
         fields: 'userEnteredFormat.numberFormat',
-        range: { endColumnIndex: 2, endRowIndex: 1, sheetId, startColumnIndex: 1, startRowIndex: 0 },
+        range: filterValueRange({ filter: 'Month', sheetId }),
       },
     },
+  ]);
+  await sheets.updateValues({
+    data: [
+      { range: `'${MONTH_VIEW_SHEET}'!C1:P1`, values: [Array.from({ length: 14 }, () => '')] },
+      { range: `'${MONTH_VIEW_SHEET}'!L1`, values: [['Filters']] },
+      { range: `'${MONTH_VIEW_SHEET}'!L2:M6`, values: FILTERS.map((filter) => [filter, filter === 'Month' ? currentMonth : ALL]) },
+    ],
+    valueInputOption: 'RAW',
+  });
+  await sheets.updateValues({
+    data: [
+      { range: `'${MONTH_VIEW_SHEET}'!A1:B2`, values: [['Month', `=${MONTH}`], ['Start', MONTH_START_FORMULA]] },
+      { range: `'${MONTH_VIEW_SHEET}'!D4:J4`, values: [MONTH_VIEW_LIST_HEADERS] },
+      { range: MONTH_VIEW_LIST_RANGE, values: [[monthViewListFormula()]] },
+      { range: `'${MONTH_VIEW_SHEET}'!${MONTHS_HELPER.column}2`, values: [[monthsHelperFormula()]] },
+      { range: `'${MONTH_VIEW_SHEET}'!${ACCOUNTS_HELPER.column}2`, values: [[accountsHelperFormula()]] },
+    ],
+    valueInputOption: 'USER_ENTERED',
+  });
+  await sheets.batchUpdate([
+    rangeDropdown({ filter: 'Month', helperColumn: MONTHS_HELPER.column, sheetId }),
+    listDropdown({ filter: 'Category', options: [ALL, ...ALL_CATEGORIES], sheetId }),
+    rangeDropdown({ filter: 'Account', helperColumn: ACCOUNTS_HELPER.column, sheetId }),
+    listDropdown({ filter: 'Review', options: REVIEW_OPTIONS, sheetId }),
+    listDropdown({ filter: 'Status', options: STATUS_OPTIONS, sheetId }),
     {
-      setDataValidation: {
-        range: { endColumnIndex: 2, endRowIndex: 1, sheetId, startColumnIndex: 1, startRowIndex: 0 },
-        rule: {
-          condition: { type: 'ONE_OF_RANGE', values: [{ userEnteredValue: `='${MONTH_VIEW_SHEET}'!$${MONTHS_HELPER_COLUMN}$5:$${MONTHS_HELPER_COLUMN}` }] },
-          showCustomUi: true,
-          strict: false,
-        },
+      repeatCell: {
+        cell: { userEnteredFormat: { textFormat: { bold: false } } },
+        fields: 'userEnteredFormat.textFormat.bold',
+        range: { endColumnIndex: 16, endRowIndex: 1, sheetId, startColumnIndex: 0, startRowIndex: 0 },
       },
     },
-    dropdown({ column: 4, options: [ALL, ...ALL_CATEGORIES], sheetId }),
-    dropdown({ column: 6, options: REVIEW_OPTIONS, sheetId }),
-    dropdown({ column: 8, options: STATUS_OPTIONS, sheetId }),
     {
       repeatCell: {
         cell: { userEnteredFormat: { textFormat: { bold: true } } },
         fields: 'userEnteredFormat.textFormat.bold',
-        range: { endRowIndex: 1, sheetId, startRowIndex: 0 },
+        range: { endColumnIndex: 1, endRowIndex: 2, sheetId, startColumnIndex: 0, startRowIndex: 0 },
       },
     },
     {
@@ -97,27 +153,25 @@ export const setUpMonthViewControls = async ({ sheetId, sheets }: { sheetId: num
         range: { endRowIndex: 4, sheetId, startRowIndex: 3 },
       },
     },
-    ...controlCells.map((column) => ({
-      repeatCell: {
-        cell: { userEnteredFormat: { backgroundColor: { blue: 0.996, green: 0.949, red: 0.859 }, textFormat: { bold: false } } },
-        fields: 'userEnteredFormat(backgroundColor,textFormat.bold)',
-        range: { endColumnIndex: column + 1, endRowIndex: 1, sheetId, startColumnIndex: column, startRowIndex: 0 },
-      },
-    })),
     {
-      updateDimensionProperties: {
-        fields: 'hiddenByUser',
-        properties: { hiddenByUser: true },
-        range: { dimension: 'COLUMNS', endIndex: helperColumnIndex + 1, sheetId, startIndex: helperColumnIndex },
+      repeatCell: {
+        cell: { userEnteredFormat: { textFormat: { bold: true } } },
+        fields: 'userEnteredFormat.textFormat.bold',
+        range: { endColumnIndex: FILTER_LABEL_COLUMN + 1, endRowIndex: FILTERS.length + 1, sheetId, startColumnIndex: FILTER_LABEL_COLUMN, startRowIndex: 0 },
       },
     },
-    ...[95, 230, 180, 100, 130, 70, 80].map((pixelSize, index) => ({
-      updateDimensionProperties: {
-        fields: 'pixelSize',
-        properties: { pixelSize },
-        range: { dimension: 'COLUMNS', endIndex: index + 4, sheetId, startIndex: index + 3 },
+    {
+      repeatCell: {
+        cell: { userEnteredFormat: { backgroundColor: { blue: 0.996, green: 0.949, red: 0.859 } } },
+        fields: 'userEnteredFormat.backgroundColor',
+        range: { endColumnIndex: FILTER_VALUE_COLUMN + 1, endRowIndex: FILTERS.length + 1, sheetId, startColumnIndex: FILTER_VALUE_COLUMN, startRowIndex: 1 },
       },
-    })),
+    },
+    ...[95, 230, 180, 100, 130, 70, 80].map((pixelSize, index) => columnProperties({ index: index + 3, pixelSize, sheetId })),
+    columnProperties({ hidden: false, index: FILTER_LABEL_COLUMN, pixelSize: 80, sheetId }),
+    columnProperties({ index: FILTER_VALUE_COLUMN, pixelSize: 230, sheetId }),
+    columnProperties({ hidden: true, index: MONTHS_HELPER.index, sheetId }),
+    columnProperties({ hidden: true, index: ACCOUNTS_HELPER.index, sheetId }),
   ]);
 };
 

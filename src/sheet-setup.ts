@@ -233,15 +233,6 @@ const HIDDEN_COLUMNS = { end: LEDGER_HEADERS.length, start: 8 };
 const VISIBLE_COLUMN_COUNT = TRANSACTIONS_COLUMN_WIDTHS.length;
 const MONTH_COLUMN = { index: LEDGER_HEADERS.length, letter: 'M' };
 const FILTERED_COLUMN_COUNT = MONTH_COLUMN.index + 1;
-const SLICERS = [
-  { columnIndex: MONTH_COLUMN.index, title: 'Month' },
-  { columnIndex: 5, title: 'Category' },
-  { columnIndex: 1, title: 'Account' },
-  { columnIndex: 6, title: 'Needs review' },
-  { columnIndex: 7, title: 'Status' },
-];
-const SLICER_SIZE = { gap: 6, height: 34, width: 130 };
-
 const monthColumnFormula = () =>
   `=ARRAYFORMULA(IF(ROW(A:A)=1,"Month",IF(ISNUMBER(A:A),TEXT(A:A,"yyyy-mm"),"")))`;
 
@@ -346,28 +337,6 @@ export const formatTransactionsSheet = async (sheets: SheetsClient) => {
       },
     },
     { setBasicFilter: { filter: { range: { endColumnIndex: FILTERED_COLUMN_COUNT, sheetId, startColumnIndex: 0, startRowIndex: 0 } } } },
-    ...SLICERS.map(({ columnIndex, title }, index) => ({
-      addSlicer: {
-        slicer: {
-          position: {
-            overlayPosition: {
-              anchorCell: { columnIndex: FILTERED_COLUMN_COUNT + 1, rowIndex: 0, sheetId },
-              heightPixels: SLICER_SIZE.height,
-              offsetXPixels: index * (SLICER_SIZE.width + SLICER_SIZE.gap),
-              offsetYPixels: 2,
-              widthPixels: SLICER_SIZE.width,
-            },
-          },
-          spec: {
-            backgroundColor: hexColor('#f8fafc'),
-            columnIndex,
-            dataRange: { endColumnIndex: FILTERED_COLUMN_COUNT, sheetId, startColumnIndex: 0, startRowIndex: 0 },
-            textFormat: { fontSize: 9, foregroundColor: hexColor('#64748b') },
-            title,
-          },
-        },
-      },
-    })),
   ]);
 
   if (monthViewId !== undefined) {

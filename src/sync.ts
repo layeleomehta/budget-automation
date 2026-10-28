@@ -163,21 +163,42 @@ export const monthBreakdown = async ({ env, month }: { env: Env; month: string }
   };
 };
 
+export const listReview = async (env: Env) => {
+  const ledger = parseLedgerRows(await sheetsClient(env).getValues(`${TRANSACTIONS_SHEET}!A2:L`));
+  return ledger
+    .filter((row) => row.review)
+    .map(({ account, amount, category, date, description, id, merchant, source, status }) => ({
+      account,
+      amount,
+      category,
+      date,
+      description,
+      id,
+      merchant,
+      source,
+      status,
+    }));
+};
+
 export const setCategory = async ({
   category,
   date,
   env,
+  id,
   match,
 }: {
   category: Category;
   date: string;
   env: Env;
+  id: string;
   match: string;
 }) => {
   const sheets = sheetsClient(env);
   const ledger = parseLedgerRows(await sheets.getValues(`${TRANSACTIONS_SHEET}!A2:L`));
   const needle = match.toUpperCase();
-  const rows = ledger.filter((row) => row.date === date && row.description.toUpperCase().includes(needle));
+  const rows = id
+    ? ledger.filter((row) => row.id === id)
+    : ledger.filter((row) => row.date === date && row.description.toUpperCase().includes(needle));
   await sheets.updateValues({
     data: rows.map((row) => ({
       range: `${TRANSACTIONS_SHEET}!F${row.rowNumber}:J${row.rowNumber}`,

@@ -1,7 +1,7 @@
 import { renderLinkPage } from './link-page';
 import { isCategory } from './categories';
 import { parseRules } from './rules';
-import { addRules, type Env, formatSheet, setCategory, getItem, listItems, monthBreakdown, plaidClient, redateTransactions, resetLedger, runSync, saveItem } from './sync';
+import { addRules, type Env, formatSheet, listReview, setCategory, getItem, listItems, monthBreakdown, plaidClient, redateTransactions, resetLedger, runSync, saveItem } from './sync';
 
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body, null, 2), { headers: { 'Content-Type': 'application/json' }, status });
@@ -72,12 +72,18 @@ export default {
       return json(await runSync(env));
     }
 
+    if (route === 'GET /review') {
+      return json(await listReview(env));
+    }
+
     if (route === 'POST /set-category') {
-      const [date, match, category] = ['date', 'match', 'category'].map((name) => url.searchParams.get(name) ?? '');
-      if (!/^\d{4}-\d{2}-\d{2}$/.test(date ?? '') || !match || !isCategory(category)) {
-        return json({ error: 'Expected date=YYYY-MM-DD, match and a valid category' }, 400);
+      const [date, match, category, id] = ['date', 'match', 'category', 'id'].map((name) => url.searchParams.get(name) ?? '');
+      const byId = Boolean(id);
+      const byMatch = /^\d{4}-\d{2}-\d{2}$/.test(date ?? '') && Boolean(match);
+      if ((!byId && !byMatch) || !isCategory(category)) {
+        return json({ error: 'Expected id, or date=YYYY-MM-DD and match, plus a valid category' }, 400);
       }
-      return json(await setCategory({ category, date: date ?? '', env, match: match ?? '' }));
+      return json(await setCategory({ category, date: date ?? '', env, id: id ?? '', match: match ?? '' }));
     }
 
     if (route === 'POST /rules') {

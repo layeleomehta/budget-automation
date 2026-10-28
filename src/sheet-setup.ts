@@ -10,10 +10,106 @@ const monthSum = ({ categoryRef }: { categoryRef: string }) =>
   `=SUMIFS(${TRANSACTIONS_SHEET}!$E:$E,${TRANSACTIONS_SHEET}!$F:$F,${categoryRef},${TRANSACTIONS_SHEET}!$A:$A,">="&$B$2,${TRANSACTIONS_SHEET}!$A:$A,"<"&EDATE($B$2,1))`;
 
 const MONTH_VIEW_LIST_RANGE = `'${MONTH_VIEW_SHEET}'!D5`;
+const MONTH_VIEW_LIST_HEADERS = ['Date', 'Account', 'Merchant', 'Amount', 'Category', 'Review', 'Status'];
+const ALL = 'All';
+const REVIEW_OPTIONS = [ALL, 'Needs review', 'Reviewed'];
+const STATUS_OPTIONS = [ALL, 'Posted', 'Pending'];
+const MONTHS_HELPER_COLUMN = 'L';
 
 const monthViewListFormula = () => {
   const t = TRANSACTIONS_SHEET;
-  return `=IFERROR(SORT(FILTER({${t}!A:A,${t}!B:B,${t}!C:C,${t}!E:E,${t}!F:F,${t}!G:G},ISNUMBER(${t}!A:A),${t}!A:A>=$B$2,${t}!A:A<EDATE($B$2,1)),1,FALSE),"No transactions")`;
+  const columns = ['A', 'B', 'C', 'E', 'F', 'G', 'H'].map((column) => `${t}!${column}:${column}`).join(',');
+  const conditions = [
+    `ISNUMBER(${t}!A:A)`,
+    `${t}!A:A>=$B$2`,
+    `${t}!A:A<EDATE($B$2,1)`,
+    `($E$1="${ALL}")+(${t}!F:F=$E$1)`,
+    `($G$1="${ALL}")+(($G$1="Needs review")*(${t}!G:G=TRUE))+(($G$1="Reviewed")*(${t}!G:G<>TRUE))`,
+    `($I$1="${ALL}")+(${t}!H:H=$I$1)`,
+  ].join(',');
+  return `=IFERROR(SORT(FILTER({${columns}},${conditions}),1,FALSE),"No transactions")`;
+};
+
+const monthsHelperFormula = () =>
+  `=SORT(UNIQUE(FILTER(TEXT(${TRANSACTIONS_SHEET}!A:A,"yyyy-mm"),ISNUMBER(${TRANSACTIONS_SHEET}!A:A))),1,FALSE)`;
+
+const dropdown = ({ column, options, sheetId }: { column: number; options: string[]; sheetId: number }) => ({
+  setDataValidation: {
+    range: { endColumnIndex: column + 1, endRowIndex: 1, sheetId, startColumnIndex: column, startRowIndex: 0 },
+    rule: {
+      condition: { type: 'ONE_OF_LIST', values: options.map((option) => ({ userEnteredValue: option })) },
+      showCustomUi: true,
+      strict: true,
+    },
+  },
+});
+
+export const setUpMonthViewControls = async ({ sheetId, sheets }: { sheetId: number; sheets: SheetsClient }) => {
+  const currentMonth = new Date().toISOString().slice(0, 7);
+  await sheets.updateValues({
+    data: [{ range: `'${MONTH_VIEW_SHEET}'!A1:I1`, values: [['Month', currentMonth, '', 'Category', ALL, 'Review', ALL, 'Status', ALL]] }],
+    valueInputOption: 'RAW',
+  });
+  await sheets.updateValues({
+    data: [
+      { range: `'${MONTH_VIEW_SHEET}'!D4:J4`, values: [MONTH_VIEW_LIST_HEADERS] },
+      { range: MONTH_VIEW_LIST_RANGE, values: [[monthViewListFormula()]] },
+      { range: `'${MONTH_VIEW_SHEET}'!${MONTHS_HELPER_COLUMN}5`, values: [[monthsHelperFormula()]] },
+    ],
+    valueInputOption: 'USER_ENTERED',
+  });
+  const helperColumnIndex = MONTHS_HELPER_COLUMN.charCodeAt(0) - 'A'.charCodeAt(0);
+  const controlCells = [1, 4, 6, 8];
+  await sheets.batchUpdate([
+    {
+      setDataValidation: {
+        range: { endColumnIndex: 2, endRowIndex: 1, sheetId, startColumnIndex: 1, startRowIndex: 0 },
+        rule: {
+          condition: { type: 'ONE_OF_RANGE', values: [{ userEnteredValue: `='${MONTH_VIEW_SHEET}'!$${MONTHS_HELPER_COLUMN}$5:$${MONTHS_HELPER_COLUMN}` }] },
+          showCustomUi: true,
+          strict: false,
+        },
+      },
+    },
+    dropdown({ column: 4, options: [ALL, ...ALL_CATEGORIES], sheetId }),
+    dropdown({ column: 6, options: REVIEW_OPTIONS, sheetId }),
+    dropdown({ column: 8, options: STATUS_OPTIONS, sheetId }),
+    {
+      repeatCell: {
+        cell: { userEnteredFormat: { textFormat: { bold: true } } },
+        fields: 'userEnteredFormat.textFormat.bold',
+        range: { endRowIndex: 1, sheetId, startRowIndex: 0 },
+      },
+    },
+    {
+      repeatCell: {
+        cell: { userEnteredFormat: { textFormat: { bold: true } } },
+        fields: 'userEnteredFormat.textFormat.bold',
+        range: { endRowIndex: 4, sheetId, startRowIndex: 3 },
+      },
+    },
+    ...controlCells.map((column) => ({
+      repeatCell: {
+        cell: { userEnteredFormat: { backgroundColor: { blue: 0.996, green: 0.949, red: 0.859 }, textFormat: { bold: false } } },
+        fields: 'userEnteredFormat(backgroundColor,textFormat.bold)',
+        range: { endColumnIndex: column + 1, endRowIndex: 1, sheetId, startColumnIndex: column, startRowIndex: 0 },
+      },
+    })),
+    {
+      updateDimensionProperties: {
+        fields: 'hiddenByUser',
+        properties: { hiddenByUser: true },
+        range: { dimension: 'COLUMNS', endIndex: helperColumnIndex + 1, sheetId, startIndex: helperColumnIndex },
+      },
+    },
+    ...[95, 230, 180, 100, 130, 70, 80].map((pixelSize, index) => ({
+      updateDimensionProperties: {
+        fields: 'pixelSize',
+        properties: { pixelSize },
+        range: { dimension: 'COLUMNS', endIndex: index + 4, sheetId, startIndex: index + 3 },
+      },
+    })),
+  ]);
 };
 
 const monthViewValues = () => {
@@ -24,7 +120,7 @@ const monthViewValues = () => {
   const incomeRow = totalRow + 1;
   return {
     rows: [
-      { range: `'${MONTH_VIEW_SHEET}'!A1:B2`, values: [['Month (YYYY-MM)', '=TEXT(TODAY(),"yyyy-mm")'], ['Start', '=DATEVALUE(B1&"-01")']] },
+      { range: `'${MONTH_VIEW_SHEET}'!A2:B2`, values: [['Start', '=DATEVALUE(B1&"-01")']] },
       {
         range: `'${MONTH_VIEW_SHEET}'!A4:B${incomeRow + 1}`,
         values: [
@@ -34,10 +130,6 @@ const monthViewValues = () => {
           ['TOTAL INCOME', `=-${monthSum({ categoryRef: `"${INCOME}"` }).slice(1)}`],
           ['SAVINGS RATE', `=IF(B${incomeRow}>0,1-B${totalRow}/B${incomeRow},"")`],
         ],
-      },
-      {
-        range: `'${MONTH_VIEW_SHEET}'!D4:I5`,
-        values: [['Date', 'Account', 'Merchant', 'Amount', 'Category', 'Review'], [monthViewListFormula()]],
       },
     ],
     totalRow,
@@ -166,6 +258,10 @@ export const formatTransactionsSheet = async (sheets: SheetsClient) => {
     rowHighlight({ background: '#fef3c7', formula: '=$G2=TRUE', sheetId }),
     { setBasicFilter: { filter: { range: { endColumnIndex: VISIBLE_COLUMN_COUNT, sheetId, startColumnIndex: 0, startRowIndex: 0 } } } },
   ]);
+
+  if (monthViewId !== undefined) {
+    await setUpMonthViewControls({ sheetId: monthViewId, sheets });
+  }
 
   return { formatted: true };
 };

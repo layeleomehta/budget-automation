@@ -118,6 +118,36 @@ export const formatSheet = async (env: Env) => {
   return result;
 };
 
+export const redateTransactions = async ({
+  env,
+  from,
+  match,
+  to,
+}: {
+  env: Env;
+  from: string;
+  match: string;
+  to: string;
+}) => {
+  const sheets = sheetsClient(env);
+  const ledger = parseLedgerRows(await sheets.getValues(`${TRANSACTIONS_SHEET}!A2:L`));
+  const needle = match.toUpperCase();
+  const rows = ledger.filter((row) => row.date === from && row.description.toUpperCase().includes(needle));
+  await sheets.updateValues({
+    data: rows.map((row) => ({ range: `${TRANSACTIONS_SHEET}!A${row.rowNumber}`, values: [[isoDateToSerial(to)]] })),
+    valueInputOption: 'RAW',
+  });
+  return rows.map(({ account, amount, category, description, rowNumber, status }) => ({
+    account,
+    amount,
+    category,
+    description,
+    movedTo: to,
+    rowNumber,
+    status,
+  }));
+};
+
 export const resetLedger = async (env: Env) => {
   const sheets = sheetsClient(env);
   const sheetId = (await sheets.getSheets()).find((sheet) => sheet.title === TRANSACTIONS_SHEET)?.sheetId;

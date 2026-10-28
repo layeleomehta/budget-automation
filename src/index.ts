@@ -1,5 +1,5 @@
 import { renderLinkPage } from './link-page';
-import { type Env, formatSheet, getItem, listItems, plaidClient, resetLedger, runSync, saveItem } from './sync';
+import { type Env, formatSheet, getItem, listItems, plaidClient, redateTransactions, resetLedger, runSync, saveItem } from './sync';
 
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body, null, 2), { headers: { 'Content-Type': 'application/json' }, status });
@@ -68,6 +68,14 @@ export default {
 
     if (route === 'POST /sync') {
       return json(await runSync(env));
+    }
+
+    if (route === 'POST /redate') {
+      const [from, to, match] = ['from', 'to', 'match'].map((name) => url.searchParams.get(name) ?? '');
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(from ?? '') || !/^\d{4}-\d{2}-\d{2}$/.test(to ?? '') || !match) {
+        return json({ error: 'Expected from=YYYY-MM-DD, to=YYYY-MM-DD and match' }, 400);
+      }
+      return json(await redateTransactions({ env, from: from ?? '', match: match ?? '', to: to ?? '' }));
     }
 
     if (route === 'POST /format') {

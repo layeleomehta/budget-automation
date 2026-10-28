@@ -1,7 +1,8 @@
+import { ACCOUNTS_SHEET, displayAccount, parseNicknames, planRelabels } from './accounts';
 import { type Categorization, categorizeWithLlm, categorizeWithoutLlm, LLM_FAILURE } from './categorize';
 import { createGoogleTokenProvider } from './google-auth';
 import { findCorrections, isoDateToSerial, LEDGER_HEADERS, parseLedgerRows, planSync, toLedgerValues, TRANSACTIONS_SHEET } from './ledger';
-import { createPlaidClient, type NormalizedTransaction, normalizeTransaction } from './plaid';
+import { accountLabel, createPlaidClient, type NormalizedTransaction, normalizeTransaction } from './plaid';
 import { parseRules, type Rule } from './rules';
 import { ensureSheetSetup, formatTransactionsSheet, RULES_SHEET } from './sheet-setup';
 import { createSheetsClient } from './sheets';
@@ -43,11 +44,15 @@ export const fetchChanges = async (env: Env) => {
   const removed: string[] = [];
   const cursors: { item: Item; nextCursor: string }[] = [];
   const errors: string[] = [];
+  const productNames = new Map<string, string>();
 
   for (const item of await listItems(env)) {
     try {
       const changes = await plaid.syncTransactions({ accessToken: item.accessToken, cursor: item.cursor });
       const accounts = new Map(changes.accounts.map((account) => [account.account_id, account]));
+      for (const account of changes.accounts) {
+        productNames.set(accountLabel({ account, institution: item.institution }), account.official_name ?? '');
+      }
       const normalize = (transaction: (typeof changes.added)[number]) =>
         normalizeTransaction({ account: accounts.get(transaction.account_id), institution: item.institution, transaction });
       added.push(...changes.added.map(normalize));
@@ -61,7 +66,7 @@ export const fetchChanges = async (env: Env) => {
     }
   }
 
-  return { added, cursors, errors, modified, removed };
+  return { added, cursors, errors, modified, productNames, removed };
 };
 
 const categorizeAll = async ({
@@ -116,7 +121,7 @@ export const formatSheet = async (env: Env) => {
 export const resetLedger = async (env: Env) => {
   const sheets = sheetsClient(env);
   const sheetId = (await sheets.getSheets()).find((sheet) => sheet.title === TRANSACTIONS_SHEET)?.sheetId;
-  await sheets.clearValues(`${TRANSACTIONS_SHEET}!A2:K`);
+  await sheets.clearValues(`${TRANSACTIONS_SHEET}!A2:L`);
   if (sheetId !== undefined) {
     await sheets.batchUpdate([
       { setDataValidation: { range: { endColumnIndex: 7, sheetId, startColumnIndex: 6, startRowIndex: 1 } } },
@@ -131,12 +136,23 @@ export const runSync = async (env: Env) => {
   const sheets = sheetsClient(env);
   await ensureSheetSetup(sheets);
 
-  const [ledgerValues, ruleValues] = await Promise.all([
-    sheets.getValues(`${TRANSACTIONS_SHEET}!A2:K`),
+  const [ledgerValues, ruleValues, accountValues] = await Promise.all([
+    sheets.getValues(`${TRANSACTIONS_SHEET}!A2:L`),
     sheets.getValues(`${RULES_SHEET}!A2:B`),
+    sheets.getValues(`${ACCOUNTS_SHEET}!A2:B`),
   ]);
   const ledger = parseLedgerRows(ledgerValues);
   const existingRules = parseRules(ruleValues);
+  const { known: knownAccounts, nicknames } = parseNicknames(accountValues);
+
+  const relabels = planRelabels({ ledger, nicknames });
+  await sheets.updateValues({
+    data: relabels.flatMap(({ account, bankAccount, rowNumber }) => [
+      { range: `${TRANSACTIONS_SHEET}!B${rowNumber}`, values: [[account]] },
+      { range: `${TRANSACTIONS_SHEET}!L${rowNumber}`, values: [[bankAccount]] },
+    ]),
+    valueInputOption: 'RAW',
+  });
 
   const { corrections, newRules } = findCorrections({ ledger, rules: existingRules });
   await sheets.updateValues({
@@ -155,8 +171,19 @@ export const runSync = async (env: Env) => {
   }
   const rules = [...existingRules, ...newRules];
 
-  const { added, cursors, errors, modified, removed } = await fetchChanges(env);
+  const { added, cursors, errors, modified, productNames, removed } = await fetchChanges(env);
   const plan = planSync({ added, ledger, modified, removed });
+
+  const newAccounts = [...new Set([...ledger.map((row) => row.bankAccount), ...productNames.keys()])].filter(
+    (bankAccount) => bankAccount && !knownAccounts.has(bankAccount),
+  );
+  if (newAccounts.length > 0) {
+    await sheets.appendValues({
+      range: `${ACCOUNTS_SHEET}!A:C`,
+      valueInputOption: 'RAW',
+      values: newAccounts.map((bankAccount) => [bankAccount, '', productNames.get(bankAccount) ?? '']),
+    });
+  }
 
   await sheets.updateValues({
     data: plan.updates.flatMap(({ rowNumber, transaction }) => [
@@ -172,10 +199,14 @@ export const runSync = async (env: Env) => {
   const inserts = plan.inserts.toSorted((a, b) => a.date.localeCompare(b.date, 'en'));
   if (inserts.length > 0) {
     await sheets.appendValues({
-      range: `${TRANSACTIONS_SHEET}!A:K`,
+      range: `${TRANSACTIONS_SHEET}!A:L`,
       valueInputOption: 'RAW',
       values: inserts.map((transaction) =>
-        toLedgerValues({ categorization: categorizations.get(transaction.id) ?? LLM_FAILURE, transaction }),
+        toLedgerValues({
+          categorization: categorizations.get(transaction.id) ?? LLM_FAILURE,
+          displayAccount: displayAccount({ bankAccount: transaction.accountLabel, nicknames }),
+          transaction,
+        }),
       ),
     });
   }
@@ -196,6 +227,7 @@ export const runSync = async (env: Env) => {
 
   return {
     corrected: corrections.length,
+    relabeled: relabels.length,
     deleted: plan.deletes.length,
     errors,
     inserted: inserts.length,

@@ -17,12 +17,14 @@ export const LEDGER_HEADERS = [
   'Source',
   'Auto Category',
   'Transaction ID',
+  'Bank Account',
 ] as const;
 
 export type LedgerRow = {
   account: string;
   amount: number;
   autoCategory: string;
+  bankAccount: string;
   category: string;
   date: string;
   description: string;
@@ -45,7 +47,7 @@ const asString = (value: unknown) => (value === undefined || value === null ? ''
 
 export const parseLedgerRows = (rows: unknown[][]): LedgerRow[] =>
   rows.flatMap((row, index) => {
-    const [date, account, merchant, description, amount, category, review, status, source, autoCategory, id] = row;
+    const [date, account, merchant, description, amount, category, review, status, source, autoCategory, id, bankAccount] = row;
     if (!id) {
       return [];
     }
@@ -54,6 +56,7 @@ export const parseLedgerRows = (rows: unknown[][]): LedgerRow[] =>
         account: asString(account),
         amount: Number(amount) || 0,
         autoCategory: asString(autoCategory),
+        bankAccount: asString(bankAccount) || asString(account),
         category: asString(category),
         date: typeof date === 'number' ? serialToIsoDate(date) : asString(date),
         description: asString(description),
@@ -69,13 +72,15 @@ export const parseLedgerRows = (rows: unknown[][]): LedgerRow[] =>
 
 export const toLedgerValues = ({
   categorization,
+  displayAccount,
   transaction,
 }: {
   categorization: Categorization;
+  displayAccount: string;
   transaction: NormalizedTransaction;
 }) => [
   isoDateToSerial(transaction.date),
-  transaction.accountLabel,
+  displayAccount,
   transaction.merchant,
   transaction.description,
   transaction.spend,
@@ -85,6 +90,7 @@ export const toLedgerValues = ({
   categorization.source,
   categorization.category,
   transaction.id,
+  transaction.accountLabel,
 ];
 
 export type SyncPlan = {

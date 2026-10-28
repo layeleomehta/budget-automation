@@ -20,6 +20,7 @@ const row = (overrides: Partial<LedgerRow> = {}): LedgerRow => ({
   account: 'Chase Sapphire ••1234',
   amount: 6.5,
   autoCategory: 'Eating Out',
+  bankAccount: 'Chase Sapphire ••1234',
   category: 'Eating Out',
   date: '2026-10-20',
   description: 'STARBUCKS STORE 1234',

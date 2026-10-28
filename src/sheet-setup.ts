@@ -1,3 +1,4 @@
+import { ACCOUNTS_HEADERS, ACCOUNTS_SHEET } from './accounts';
 import { ALL_CATEGORIES, BUDGET_CATEGORIES, INCOME, UNCATEGORIZED } from './categories';
 import { LEDGER_HEADERS, TRANSACTIONS_SHEET } from './ledger';
 import { SEED_RULES } from './rules';
@@ -228,7 +229,7 @@ const numberFormat = ({
 const FRIENDLY_DATE = 'mmm d, yyyy';
 const CURRENCY = '$#,##0.00;-$#,##0.00';
 const TRANSACTIONS_COLUMN_WIDTHS = [105, 230, 180, 280, 100, 130, 70, 80];
-const HIDDEN_COLUMNS = { end: 11, start: 8 };
+const HIDDEN_COLUMNS = { end: LEDGER_HEADERS.length, start: 8 };
 const VISIBLE_COLUMN_COUNT = TRANSACTIONS_COLUMN_WIDTHS.length;
 
 const hexColor = (hex: string) => ({
@@ -331,12 +332,20 @@ export const formatTransactionsSheet = async (sheets: SheetsClient) => {
 
 export const ensureSheetSetup = async (sheets: SheetsClient) => {
   const existing = new Set((await sheets.getSheets()).map((sheet) => sheet.title));
-  const missing = [TRANSACTIONS_SHEET, RULES_SHEET, MONTH_VIEW_SHEET].filter((title) => !existing.has(title));
-  if (missing.length === 0) {
+  const missing = [TRANSACTIONS_SHEET, RULES_SHEET, MONTH_VIEW_SHEET, ACCOUNTS_SHEET].filter((title) => !existing.has(title));
+  if (existing.has(TRANSACTIONS_SHEET)) {
+    await sheets.updateValues({
+      data: [{ range: `${TRANSACTIONS_SHEET}!A1:L1`, values: [[...LEDGER_HEADERS]] }],
+      valueInputOption: 'RAW',
+    });
+  }
+  if (existing.has(MONTH_VIEW_SHEET)) {
     await sheets.updateValues({
       data: [{ range: MONTH_VIEW_LIST_RANGE, values: [[monthViewListFormula()]] }],
       valueInputOption: 'USER_ENTERED',
     });
+  }
+  if (missing.length === 0) {
     return;
   }
 
@@ -345,7 +354,7 @@ export const ensureSheetSetup = async (sheets: SheetsClient) => {
 
   const transactionsId = created.get(TRANSACTIONS_SHEET);
   if (transactionsId !== undefined) {
-    await sheets.updateValues({ data: [{ range: `${TRANSACTIONS_SHEET}!A1:K1`, values: [[...LEDGER_HEADERS]] }], valueInputOption: 'RAW' });
+    await sheets.updateValues({ data: [{ range: `${TRANSACTIONS_SHEET}!A1:L1`, values: [[...LEDGER_HEADERS]] }], valueInputOption: 'RAW' });
     await sheets.batchUpdate([
       numberFormat({ endColumn: 1, pattern: FRIENDLY_DATE, sheetId: transactionsId, startColumn: 0, startRow: 1, type: 'DATE' }),
       numberFormat({ endColumn: 5, pattern: '$#,##0.00;-$#,##0.00', sheetId: transactionsId, startColumn: 4, startRow: 1, type: 'CURRENCY' }),
@@ -370,6 +379,34 @@ export const ensureSheetSetup = async (sheets: SheetsClient) => {
       },
     ]);
     await formatTransactionsSheet(sheets);
+  }
+
+  const accountsId = created.get(ACCOUNTS_SHEET);
+  if (accountsId !== undefined) {
+    await sheets.updateValues({ data: [{ range: `${ACCOUNTS_SHEET}!A1:C1`, values: [[...ACCOUNTS_HEADERS]] }], valueInputOption: 'RAW' });
+    await sheets.batchUpdate([
+      {
+        repeatCell: {
+          cell: { userEnteredFormat: { backgroundColor: hexColor('#e5e7eb'), textFormat: { bold: true } } },
+          fields: 'userEnteredFormat(backgroundColor,textFormat.bold)',
+          range: { endRowIndex: 1, sheetId: accountsId, startRowIndex: 0 },
+        },
+      },
+      {
+        repeatCell: {
+          cell: { userEnteredFormat: { backgroundColor: hexColor('#dbeafe') } },
+          fields: 'userEnteredFormat.backgroundColor',
+          range: { endColumnIndex: 2, sheetId: accountsId, startColumnIndex: 1, startRowIndex: 1 },
+        },
+      },
+      ...[260, 220, 200].map((pixelSize, index) => ({
+        updateDimensionProperties: {
+          fields: 'pixelSize',
+          properties: { pixelSize },
+          range: { dimension: 'COLUMNS', endIndex: index + 1, sheetId: accountsId, startIndex: index },
+        },
+      })),
+    ]);
   }
 
   if (created.has(RULES_SHEET)) {

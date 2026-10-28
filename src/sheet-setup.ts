@@ -226,7 +226,7 @@ const styleMonthView = async ({ sheets, sheetId }: { sheetId: number; sheets: Sh
     {
       updateDimensionProperties: {
         fields: 'pixelSize',
-        properties: { pixelSize: 26 },
+        properties: { pixelSize: 21 },
         range: { dimension: 'ROWS', endIndex: savingsRow, sheetId, startIndex: 3 },
       },
     },

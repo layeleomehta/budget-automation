@@ -1,7 +1,7 @@
 import { ACCOUNTS_SHEET, displayAccount, parseNicknames, planRelabels } from './accounts';
 import { type Categorization, categorizeWithLlm, categorizeWithoutLlm, LLM_FAILURE } from './categorize';
 import { createGoogleTokenProvider } from './google-auth';
-import { findCorrections, isoDateToSerial, LEDGER_HEADERS, parseLedgerRows, planSync, toLedgerValues, TRANSACTIONS_SHEET } from './ledger';
+import { findCorrections, isoDateToSerial, reapplyRules, LEDGER_HEADERS, parseLedgerRows, planSync, toLedgerValues, TRANSACTIONS_SHEET } from './ledger';
 import { accountLabel, createPlaidClient, type NormalizedTransaction, normalizeTransaction } from './plaid';
 import { parseRules, type Rule } from './rules';
 import { ensureSheetSetup, formatTransactionsSheet, RULES_SHEET } from './sheet-setup';
@@ -118,6 +118,20 @@ export const formatSheet = async (env: Env) => {
   return result;
 };
 
+export const addRules = async ({ env, rules }: { env: Env; rules: Rule[] }) => {
+  const sheets = sheetsClient(env);
+  const existing = new Set(parseRules(await sheets.getValues(`${RULES_SHEET}!A2:B`)).map((rule) => rule.pattern.toUpperCase()));
+  const fresh = rules.filter((rule) => !existing.has(rule.pattern.toUpperCase()));
+  if (fresh.length > 0) {
+    await sheets.appendValues({
+      range: `${RULES_SHEET}!A:B`,
+      valueInputOption: 'RAW',
+      values: fresh.map((rule) => [rule.pattern, rule.category]),
+    });
+  }
+  return { added: fresh };
+};
+
 export const monthBreakdown = async ({ env, month }: { env: Env; month: string }) => {
   const ledger = parseLedgerRows(await sheetsClient(env).getValues(`${TRANSACTIONS_SHEET}!A2:L`));
   const rows = ledger.filter((row) => row.date.startsWith(month));
@@ -222,6 +236,19 @@ export const runSync = async (env: Env) => {
   }
   const rules = [...existingRules, ...newRules];
 
+  const recategorized = reapplyRules({
+    ledger,
+    rules,
+    skipRows: new Set(corrections.map((correction) => correction.rowNumber)),
+  });
+  await sheets.updateValues({
+    data: recategorized.map(({ category, rowNumber, source }) => ({
+      range: `${TRANSACTIONS_SHEET}!F${rowNumber}:J${rowNumber}`,
+      values: [[category, false, null, source, category]],
+    })),
+    valueInputOption: 'RAW',
+  });
+
   const { added, cursors, errors, modified, productNames, removed } = await fetchChanges(env);
   const plan = planSync({ added, ledger, modified, removed });
 
@@ -278,6 +305,7 @@ export const runSync = async (env: Env) => {
 
   return {
     corrected: corrections.length,
+    recategorized: recategorized.length,
     relabeled: relabels.length,
     deleted: plan.deletes.length,
     errors,

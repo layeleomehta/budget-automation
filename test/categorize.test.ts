@@ -20,9 +20,9 @@ const transaction = (overrides: Partial<NormalizedTransaction>): NormalizedTrans
 describe('categorizeWithoutLlm', () => {
   it.each<{ name: string; input: Partial<NormalizedTransaction>; expected: ReturnType<typeof categorizeWithoutLlm> }>([
     {
-      expected: { category: 'Uncategorized', review: true, source: 'venmo' },
+      expected: { category: 'Misc', review: false, source: 'venmo' },
       input: { accountType: 'depository', description: 'VENMO CASHOUT PPD', merchant: 'Venmo', spend: -40 },
-      name: 'sends Venmo to review',
+      name: 'nets Venmo against Misc',
     },
     {
       expected: { category: 'Transfer', review: false, source: 'bank' },

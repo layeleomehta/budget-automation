@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { findCorrections, isoDateToSerial, type LedgerRow, parseLedgerRows, planSync } from '../src/ledger';
+import { findCorrections, isoDateToSerial, type LedgerRow, parseLedgerRows, planSync, reapplyRules } from '../src/ledger';
 import type { NormalizedTransaction } from '../src/plaid';
 
 const transaction = (overrides: Partial<NormalizedTransaction> = {}): NormalizedTransaction => ({
@@ -101,5 +101,44 @@ describe('parseLedgerRows', () => {
     const id = crypto.randomUUID();
     const [parsed] = parseLedgerRows([[isoDateToSerial('2026-10-27'), 'acct', 'm', 'd', 12.5, 'Misc', true, 'posted', 'llm', 'Misc', id]]);
     expect(parsed).toMatchObject({ date: '2026-10-27', id, review: true, rowNumber: 2 });
+  });
+});
+
+describe('reapplyRules', () => {
+  const rules = [{ category: 'Groceries' as const, pattern: 'TARGET' }];
+
+  it.each<{ name: string; input: Partial<LedgerRow>; skip: number[]; expected: unknown[] }>([
+    {
+      expected: [{ category: 'Groceries', rowNumber: 3, source: 'rule' }],
+      input: { category: 'Shopping', description: 'TARGET 00012', merchant: 'Target', rowNumber: 3 },
+      name: 'moves a row to the category its rule names',
+      skip: [],
+    },
+    {
+      expected: [{ category: 'Misc', rowNumber: 4, source: 'venmo' }],
+      input: { category: 'Uncategorized', description: 'Venmo', merchant: '', rowNumber: 4 },
+      name: 'sends Venmo to Misc',
+      skip: [],
+    },
+    {
+      expected: [],
+      input: { category: 'Shopping', description: 'TARGET', source: 'manual' },
+      name: 'never overrides a manual edit',
+      skip: [],
+    },
+    {
+      expected: [],
+      input: { category: 'Shopping', description: 'TARGET', rowNumber: 8 },
+      name: 'skips rows corrected in this sync',
+      skip: [8],
+    },
+    {
+      expected: [],
+      input: { category: 'Groceries', description: 'TARGET' },
+      name: 'leaves rows already in the right category',
+      skip: [],
+    },
+  ])('$name', ({ expected, input, skip }) => {
+    expect(reapplyRules({ ledger: [row(input)], rules, skipRows: new Set(skip) })).toStrictEqual(expected);
   });
 });

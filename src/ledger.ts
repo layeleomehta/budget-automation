@@ -1,6 +1,6 @@
 import { type Category, isCategory, UNCATEGORIZED } from './categories';
 import type { Categorization } from './categorize';
-import { isVenmo, merchantKey, type Rule } from './rules';
+import { isVenmo, matchRule, merchantKey, type Rule } from './rules';
 import type { NormalizedTransaction } from './plaid';
 
 export const TRANSACTIONS_SHEET = 'Transactions';
@@ -169,3 +169,30 @@ export const findCorrections = ({ ledger, rules }: { ledger: LedgerRow[]; rules:
 
   return { corrections, newRules };
 };
+
+export type Recategorization = { category: Category; rowNumber: number; source: 'rule' | 'venmo' };
+
+export const reapplyRules = ({
+  ledger,
+  rules,
+  skipRows,
+}: {
+  ledger: LedgerRow[];
+  rules: Rule[];
+  skipRows: Set<number>;
+}): Recategorization[] =>
+  ledger.flatMap((row) => {
+    if (row.source === 'manual' || skipRows.has(row.rowNumber)) {
+      return [];
+    }
+    const next: Omit<Recategorization, 'rowNumber'> | undefined = isVenmo(row)
+      ? { category: 'Misc', source: 'venmo' }
+      : (() => {
+          const rule = matchRule({ rules, transaction: row });
+          return rule ? { category: rule.category, source: 'rule' as const } : undefined;
+        })();
+    if (!next || next.category === row.category) {
+      return [];
+    }
+    return [{ ...next, rowNumber: row.rowNumber }];
+  });

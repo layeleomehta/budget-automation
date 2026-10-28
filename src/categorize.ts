@@ -30,7 +30,7 @@ export const categorizeWithoutLlm = ({
   transaction: NormalizedTransaction;
 }): Categorization | undefined => {
   if (isVenmo(transaction)) {
-    return { category: UNCATEGORIZED, review: true, source: 'venmo' };
+    return { category: 'Misc', review: false, source: 'venmo' };
   }
   const rule = matchRule({ rules, transaction });
   if (rule) {

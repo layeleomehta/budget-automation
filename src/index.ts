@@ -1,5 +1,6 @@
 import { renderLinkPage } from './link-page';
-import { type Env, formatSheet, getItem, listItems, monthBreakdown, plaidClient, redateTransactions, resetLedger, runSync, saveItem } from './sync';
+import { parseRules } from './rules';
+import { addRules, type Env, formatSheet, getItem, listItems, monthBreakdown, plaidClient, redateTransactions, resetLedger, runSync, saveItem } from './sync';
 
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body, null, 2), { headers: { 'Content-Type': 'application/json' }, status });
@@ -68,6 +69,15 @@ export default {
 
     if (route === 'POST /sync') {
       return json(await runSync(env));
+    }
+
+    if (route === 'POST /rules') {
+      const body: unknown = await request.json().catch(() => null);
+      const rules = parseRules(Array.isArray(body) ? body.map((rule: { category?: unknown; pattern?: unknown }) => [rule?.pattern, rule?.category]) : []);
+      if (rules.length === 0) {
+        return json({ error: 'Expected [{ pattern, category }]' }, 400);
+      }
+      return json(await addRules({ env, rules }));
     }
 
     if (route === 'GET /month') {

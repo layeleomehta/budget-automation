@@ -334,7 +334,7 @@ export const setUpMonthViewControls = async ({ sheetId, sheets }: { sheetId: num
     valueInputOption: 'USER_ENTERED',
   });
   await sheets.batchUpdate([
-    numberFormat({ endColumn: 3, endRow: incomeRow - 1, pattern: '0.0%', sheetId, startColumn: 2, startRow: firstRow - 1, type: 'PERCENT' }),
+    numberFormat({ endColumn: 3, endRow: incomeRow - 1, pattern: '0.00%', sheetId, startColumn: 2, startRow: firstRow - 1, type: 'PERCENT' }),
     {
       repeatCell: {
         cell: { userEnteredFormat: { horizontalAlignment: 'RIGHT', textFormat: { foregroundColor: hexColor('#6b7280') } } },

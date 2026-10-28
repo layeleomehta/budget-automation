@@ -91,6 +91,6 @@ describe('categorizeWithoutLlm', () => {
 
 describe('matchRule', () => {
   it('is case-insensitive and checks the merchant name too', () => {
-    expect(matchRule({ rules: SEED_RULES, transaction: { description: 'card purchase', merchant: 'spotify usa' } })?.category).toBe('Spotify');
+    expect(matchRule({ rules: SEED_RULES, transaction: { description: 'card purchase', merchant: 'lyft ride' } })?.category).toBe('Transportation');
   });
 });

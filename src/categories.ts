@@ -3,7 +3,6 @@ export const BUDGET_CATEGORIES = [
   'Utilities',
   'Wifi',
   'Phone Plan',
-  'Spotify',
   'Gym',
   'Groceries',
   'Eating Out',

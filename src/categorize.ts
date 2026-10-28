@@ -74,7 +74,6 @@ Categories:
 - Utilities: electricity, gas, water.
 - Wifi: home internet.
 - Phone Plan: mobile phone service.
-- Spotify: Spotify subscription.
 - Gym: gym membership.
 - Groceries: supermarkets and grocery stores.
 - Eating Out: restaurants, bars, cafes, coffee, food delivery.

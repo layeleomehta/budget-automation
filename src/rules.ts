@@ -7,7 +7,6 @@ export const SEED_RULES: Rule[] = [
   { category: 'Transfer', pattern: 'AUTOPAY' },
   { category: 'Transfer', pattern: 'PAYMENT THANK YOU' },
   { category: 'Transfer', pattern: 'CHASE CREDIT CRD' },
-  { category: 'Spotify', pattern: 'SPOTIFY' },
   { category: 'Eating Out', pattern: 'UBER EATS' },
   { category: 'Eating Out', pattern: 'DOORDASH' },
   { category: 'Transportation', pattern: 'UBER' },

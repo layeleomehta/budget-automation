@@ -174,6 +174,23 @@ export const setUpMonthViewControls = async ({ sheetId, sheets }: { sheetId: num
     columnProperties({ hidden: true, index: MONTHS_HELPER.index, sheetId }),
     columnProperties({ hidden: true, index: ACCOUNTS_HELPER.index, sheetId }),
   ]);
+  const { firstRow, incomeRow, rows } = monthViewValues();
+  const staleRow = incomeRow + 2;
+  await sheets.updateValues({
+    data: [...rows, { range: `'${MONTH_VIEW_SHEET}'!A${staleRow}:B${staleRow}`, values: [['', '']] }],
+    valueInputOption: 'USER_ENTERED',
+  });
+  await sheets.batchUpdate([
+    numberFormat({ endColumn: 2, endRow: incomeRow, pattern: '$#,##0.00', sheetId, startColumn: 1, startRow: firstRow - 1, type: 'CURRENCY' }),
+    numberFormat({ endColumn: 2, endRow: incomeRow + 1, pattern: '0.0%', sheetId, startColumn: 1, startRow: incomeRow, type: 'PERCENT' }),
+    {
+      repeatCell: {
+        cell: { userEnteredFormat: {} },
+        fields: 'userEnteredFormat.numberFormat',
+        range: { endColumnIndex: 2, endRowIndex: staleRow, sheetId, startColumnIndex: 0, startRowIndex: staleRow - 1 },
+      },
+    },
+  ]);
 };
 
 const monthViewValues = () => {
@@ -468,6 +485,18 @@ export const formatTransactionsSheet = async (sheets: SheetsClient) => {
     { setBasicFilter: { filter: { range: { endColumnIndex: FILTERED_COLUMN_COUNT, sheetId, startColumnIndex: 0, startRowIndex: 0 } } } },
   ]);
 
+  await sheets.batchUpdate([
+    {
+      setDataValidation: {
+        range: { endColumnIndex: 6, sheetId, startColumnIndex: 5, startRowIndex: 1 },
+        rule: {
+          condition: { type: 'ONE_OF_LIST', values: ALL_CATEGORIES.map((category) => ({ userEnteredValue: category })) },
+          showCustomUi: true,
+          strict: true,
+        },
+      },
+    },
+  ]);
   await setUpTransactionsFilterBar({ sheetId, sheets });
 
   if (monthViewId !== undefined) {

@@ -70,6 +70,98 @@ const numberFormat = ({
   },
 });
 
+const TRANSACTIONS_COLUMN_WIDTHS = [95, 230, 180, 280, 100, 130, 70, 80];
+const HIDDEN_COLUMNS = { end: 11, start: 8 };
+const VISIBLE_COLUMN_COUNT = TRANSACTIONS_COLUMN_WIDTHS.length;
+
+const hexColor = (hex: string) => ({
+  blue: parseInt(hex.slice(5, 7), 16) / 255,
+  green: parseInt(hex.slice(3, 5), 16) / 255,
+  red: parseInt(hex.slice(1, 3), 16) / 255,
+});
+
+const rowHighlight = ({ background, formula, sheetId, textColor }: { background?: string; formula: string; sheetId: number; textColor?: string }) => ({
+  addConditionalFormatRule: {
+    index: 0,
+    rule: {
+      booleanRule: {
+        condition: { type: 'CUSTOM_FORMULA', values: [{ userEnteredValue: formula }] },
+        format: {
+          ...(background ? { backgroundColor: hexColor(background) } : {}),
+          ...(textColor ? { textFormat: { foregroundColor: hexColor(textColor) } } : {}),
+        },
+      },
+      ranges: [{ endColumnIndex: VISIBLE_COLUMN_COUNT, sheetId, startColumnIndex: 0, startRowIndex: 1 }],
+    },
+  },
+});
+
+export const formatTransactionsSheet = async (sheets: SheetsClient) => {
+  const details = await sheets.getSheetDetails(TRANSACTIONS_SHEET);
+  if (!details) {
+    return { formatted: false };
+  }
+  const { bandedRangeIds, conditionalFormatCount, sheetId } = details;
+
+  await sheets.batchUpdate([
+    ...bandedRangeIds.map((bandedRangeId) => ({ deleteBanding: { bandedRangeId } })),
+    ...Array.from({ length: conditionalFormatCount }, (_, offset) => ({
+      deleteConditionalFormatRule: { index: conditionalFormatCount - 1 - offset, sheetId },
+    })),
+    ...TRANSACTIONS_COLUMN_WIDTHS.map((pixelSize, index) => ({
+      updateDimensionProperties: {
+        fields: 'pixelSize,hiddenByUser',
+        properties: { hiddenByUser: false, pixelSize },
+        range: { dimension: 'COLUMNS', endIndex: index + 1, sheetId, startIndex: index },
+      },
+    })),
+    {
+      updateDimensionProperties: {
+        fields: 'hiddenByUser',
+        properties: { hiddenByUser: true },
+        range: { dimension: 'COLUMNS', endIndex: HIDDEN_COLUMNS.end, sheetId, startIndex: HIDDEN_COLUMNS.start },
+      },
+    },
+    {
+      repeatCell: {
+        cell: {
+          userEnteredFormat: {
+            textFormat: { bold: true },
+            verticalAlignment: 'MIDDLE',
+          },
+        },
+        fields: 'userEnteredFormat(textFormat.bold,verticalAlignment)',
+        range: { endRowIndex: 1, sheetId, startRowIndex: 0 },
+      },
+    },
+    {
+      repeatCell: {
+        cell: { userEnteredFormat: { horizontalAlignment: 'CENTER' } },
+        fields: 'userEnteredFormat.horizontalAlignment',
+        range: { endColumnIndex: 7, sheetId, startColumnIndex: 6, startRowIndex: 1 },
+      },
+    },
+    {
+      addBanding: {
+        bandedRange: {
+          range: { endColumnIndex: VISIBLE_COLUMN_COUNT, sheetId, startColumnIndex: 0, startRowIndex: 0 },
+          rowProperties: {
+            firstBandColor: hexColor('#ffffff'),
+            headerColor: hexColor('#e5e7eb'),
+            secondBandColor: hexColor('#f8fafc'),
+          },
+        },
+      },
+    },
+    rowHighlight({ formula: '=$E2<0', sheetId, textColor: '#15803d' }),
+    rowHighlight({ formula: '=$F2="Transfer"', sheetId, textColor: '#9ca3af' }),
+    rowHighlight({ background: '#fef3c7', formula: '=$G2=TRUE', sheetId }),
+    { setBasicFilter: { filter: { range: { endColumnIndex: VISIBLE_COLUMN_COUNT, sheetId, startColumnIndex: 0, startRowIndex: 0 } } } },
+  ]);
+
+  return { formatted: true };
+};
+
 export const ensureSheetSetup = async (sheets: SheetsClient) => {
   const existing = new Set((await sheets.getSheets()).map((sheet) => sheet.title));
   const missing = [TRANSACTIONS_SHEET, RULES_SHEET, MONTH_VIEW_SHEET].filter((title) => !existing.has(title));
@@ -110,6 +202,7 @@ export const ensureSheetSetup = async (sheets: SheetsClient) => {
         },
       },
     ]);
+    await formatTransactionsSheet(sheets);
   }
 
   if (created.has(RULES_SHEET)) {

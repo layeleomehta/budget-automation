@@ -46,6 +46,25 @@ export const createSheetsClient = ({
     clearValues: (range: string) =>
       request(`/values/${encodeURIComponent(range)}:clear`, { body: '{}', method: 'POST' }),
 
+    getSheetDetails: async (title: string) => {
+      const { sheets } = await request<{
+        sheets: {
+          bandedRanges?: { bandedRangeId: number }[];
+          conditionalFormats?: unknown[];
+          properties: { sheetId: number; title: string };
+        }[];
+      }>('?fields=sheets(properties(sheetId,title),bandedRanges(bandedRangeId),conditionalFormats)');
+      const sheet = sheets.find((candidate) => candidate.properties.title === title);
+      if (!sheet) {
+        return undefined;
+      }
+      return {
+        bandedRangeIds: (sheet.bandedRanges ?? []).map((banded) => banded.bandedRangeId),
+        conditionalFormatCount: sheet.conditionalFormats?.length ?? 0,
+        sheetId: sheet.properties.sheetId,
+      };
+    },
+
     getSheets: async () => {
       const { sheets } = await request<{ sheets: { properties: { sheetId: number; title: string } }[] }>(
         '?fields=sheets.properties(sheetId,title)',

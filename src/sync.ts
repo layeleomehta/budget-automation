@@ -3,7 +3,7 @@ import { createGoogleTokenProvider } from './google-auth';
 import { findCorrections, isoDateToSerial, parseLedgerRows, planSync, toLedgerValues, TRANSACTIONS_SHEET } from './ledger';
 import { createPlaidClient, type NormalizedTransaction, normalizeTransaction } from './plaid';
 import { parseRules, type Rule } from './rules';
-import { ensureSheetSetup, RULES_SHEET } from './sheet-setup';
+import { ensureSheetSetup, formatTransactionsSheet, RULES_SHEET } from './sheet-setup';
 import { createSheetsClient } from './sheets';
 
 export type Env = {
@@ -97,6 +97,8 @@ const sheetsClient = (env: Env) =>
     getAccessToken: createGoogleTokenProvider(env.GOOGLE_SERVICE_ACCOUNT_JSON),
     spreadsheetId: env.SPREADSHEET_ID,
   });
+
+export const formatSheet = (env: Env) => formatTransactionsSheet(sheetsClient(env));
 
 export const resetLedger = async (env: Env) => {
   const sheets = sheetsClient(env);

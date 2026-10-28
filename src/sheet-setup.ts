@@ -269,6 +269,7 @@ export const TRANSACTIONS_FILTER_BAR = [
 ] as const;
 const FILTER_BAR_START = 14;
 const FILTER_BAR_HELPERS = { accounts: 25, months: 24 };
+const FILTER_BAR_BORDER = { color: hexColor('#93c5fd'), style: 'SOLID' };
 
 const setUpTransactionsFilterBar = async ({ sheetId, sheets }: { sheetId: number; sheets: SheetsClient }) => {
   const t = TRANSACTIONS_SHEET;
@@ -331,21 +332,44 @@ const setUpTransactionsFilterBar = async ({ sheetId, sheets }: { sheetId: number
           },
         },
         {
+          updateBorders: {
+            bottom: FILTER_BAR_BORDER,
+            left: FILTER_BAR_BORDER,
+            range: { endColumnIndex: valueColumn + 1, endRowIndex: 1, sheetId, startColumnIndex: valueColumn, startRowIndex: 0 },
+            right: FILTER_BAR_BORDER,
+            top: FILTER_BAR_BORDER,
+          },
+        },
+        {
           updateDimensionProperties: {
             fields: 'pixelSize,hiddenByUser',
-            properties: { hiddenByUser: false, pixelSize: 70 },
+            properties: { hiddenByUser: false, pixelSize: 72 },
             range: { dimension: 'COLUMNS', endIndex: labelColumn + 1, sheetId, startIndex: labelColumn },
           },
         },
         {
           updateDimensionProperties: {
             fields: 'pixelSize,hiddenByUser',
-            properties: { hiddenByUser: false, pixelSize: index === 2 ? 200 : 120 },
+            properties: { hiddenByUser: false, pixelSize: index === 2 ? 190 : 140 },
             range: { dimension: 'COLUMNS', endIndex: valueColumn + 1, sheetId, startIndex: valueColumn },
           },
         },
       ];
     }),
+    {
+      updateDimensionProperties: {
+        fields: 'pixelSize',
+        properties: { pixelSize: 30 },
+        range: { dimension: 'ROWS', endIndex: 1, sheetId, startIndex: 0 },
+      },
+    },
+    {
+      repeatCell: {
+        cell: { userEnteredFormat: { verticalAlignment: 'MIDDLE' } },
+        fields: 'userEnteredFormat.verticalAlignment',
+        range: { endRowIndex: 1, sheetId, startRowIndex: 0 },
+      },
+    },
     {
       updateDimensionProperties: {
         fields: 'pixelSize',

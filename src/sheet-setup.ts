@@ -404,6 +404,49 @@ const setUpTransactionsFilterBar = async ({ sheetId, sheets }: { sheetId: number
   ]);
 };
 
+const listValidation = ({ column, options, row, sheetId }: { column: number; options: string[]; row: number; sheetId: number }) => ({
+  setDataValidation: {
+    range: { endColumnIndex: column + 1, endRowIndex: row + 1, sheetId, startColumnIndex: column, startRowIndex: row },
+    rule: {
+      condition: { type: 'ONE_OF_LIST', values: options.map((option) => ({ userEnteredValue: option })) },
+      showCustomUi: true,
+      strict: true,
+    },
+  },
+});
+
+const filterBarValueColumn = (label: (typeof TRANSACTIONS_FILTER_BAR)[number]['label']) =>
+  FILTER_BAR_START + TRANSACTIONS_FILTER_BAR.findIndex((filter) => filter.label === label) * 2 + 1;
+
+export const applyFilterOptions = async ({
+  accounts,
+  months,
+  sheets,
+}: {
+  accounts: string[];
+  months: string[];
+  sheets: SheetsClient;
+}) => {
+  const ids = new Map((await sheets.getSheets()).map((sheet) => [sheet.title, sheet.sheetId]));
+  const monthViewId = ids.get(MONTH_VIEW_SHEET);
+  const transactionsId = ids.get(TRANSACTIONS_SHEET);
+  const accountOptions = [ALL, ...accounts];
+  await sheets.batchUpdate([
+    ...(monthViewId === undefined
+      ? []
+      : [
+          listValidation({ column: FILTER_VALUE_COLUMN, options: months, row: FILTERS.indexOf('Month') + 1, sheetId: monthViewId }),
+          listValidation({ column: FILTER_VALUE_COLUMN, options: accountOptions, row: FILTERS.indexOf('Account') + 1, sheetId: monthViewId }),
+        ]),
+    ...(transactionsId === undefined
+      ? []
+      : [
+          listValidation({ column: filterBarValueColumn('Month'), options: [ALL, ...months], row: 0, sheetId: transactionsId }),
+          listValidation({ column: filterBarValueColumn('Account'), options: accountOptions, row: 0, sheetId: transactionsId }),
+        ]),
+  ]);
+};
+
 export const formatTransactionsSheet = async (sheets: SheetsClient) => {
   const details = await sheets.getSheetDetails(TRANSACTIONS_SHEET);
   if (!details) {

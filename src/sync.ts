@@ -5,7 +5,7 @@ import { createGoogleTokenProvider } from './google-auth';
 import { findCorrections, isoDateToSerial, reapplyRules, LEDGER_HEADERS, parseLedgerRows, planSync, toLedgerValues, TRANSACTIONS_SHEET } from './ledger';
 import { accountLabel, createPlaidClient, type NormalizedTransaction, normalizeTransaction } from './plaid';
 import { parseRules, type Rule } from './rules';
-import { ensureSheetSetup, formatTransactionsSheet, RULES_SHEET } from './sheet-setup';
+import { applyFilterOptions, ensureSheetSetup, formatTransactionsSheet, RULES_SHEET } from './sheet-setup';
 import { createSheetsClient } from './sheets';
 
 export type Env = {
@@ -111,11 +111,20 @@ const newestFirst = (sheetId: number | undefined) => ({
   },
 });
 
+const filterOptions = (entries: { account: string; date: string }[]) => ({
+  accounts: [...new Set(entries.map((entry) => entry.account).filter(Boolean))].toSorted((a, b) => a.localeCompare(b, 'en')),
+  months: [...new Set(entries.map((entry) => entry.date.slice(0, 7)).filter((month) => /^\d{4}-\d{2}$/.test(month)))]
+    .toSorted()
+    .toReversed(),
+});
+
 export const formatSheet = async (env: Env) => {
   const sheets = sheetsClient(env);
   const result = await formatTransactionsSheet(sheets);
   const sheetId = (await sheets.getSheets()).find((sheet) => sheet.title === TRANSACTIONS_SHEET)?.sheetId;
   await sheets.batchUpdate([newestFirst(sheetId)]);
+  const ledger = parseLedgerRows(await sheets.getValues(`${TRANSACTIONS_SHEET}!A2:L`));
+  await applyFilterOptions({ ...filterOptions(ledger), sheets });
   return result;
 };
 
@@ -326,6 +335,17 @@ export const runSync = async (env: Env) => {
       newestFirst(sheetId),
     ]);
   }
+
+  await applyFilterOptions({
+    ...filterOptions([
+      ...ledger.map((row) => ({ account: displayAccount({ bankAccount: row.bankAccount, nicknames }), date: row.date })),
+      ...inserts.map((transaction) => ({
+        account: displayAccount({ bankAccount: transaction.accountLabel, nicknames }),
+        date: transaction.date,
+      })),
+    ]),
+    sheets,
+  });
 
   await Promise.all(cursors.map(({ item, nextCursor }) => saveItem({ env, item: { ...item, cursor: nextCursor } })));
 

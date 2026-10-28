@@ -177,10 +177,19 @@ export const setUpMonthViewControls = async ({ sheetId, sheets }: { sheetId: num
   const { firstRow, incomeRow, rows } = monthViewValues();
   const staleRow = incomeRow + 2;
   await sheets.updateValues({
-    data: [...rows, { range: `'${MONTH_VIEW_SHEET}'!A${staleRow}:B${staleRow}`, values: [['', '']] }],
+    data: [...rows, { range: `'${MONTH_VIEW_SHEET}'!A${staleRow}:C${staleRow}`, values: [['', '', '']] }],
     valueInputOption: 'USER_ENTERED',
   });
   await sheets.batchUpdate([
+    numberFormat({ endColumn: 3, endRow: incomeRow - 1, pattern: '0.0%', sheetId, startColumn: 2, startRow: firstRow - 1, type: 'PERCENT' }),
+    {
+      repeatCell: {
+        cell: { userEnteredFormat: { horizontalAlignment: 'RIGHT', textFormat: { foregroundColor: hexColor('#6b7280') } } },
+        fields: 'userEnteredFormat(horizontalAlignment,textFormat.foregroundColor)',
+        range: { endColumnIndex: 3, endRowIndex: incomeRow - 1, sheetId, startColumnIndex: 2, startRowIndex: 3 },
+      },
+    },
+    columnProperties({ index: 2, pixelSize: 90, sheetId }),
     numberFormat({ endColumn: 2, endRow: incomeRow, pattern: '$#,##0.00', sheetId, startColumn: 1, startRow: firstRow - 1, type: 'CURRENCY' }),
     numberFormat({ endColumn: 2, endRow: incomeRow + 1, pattern: '0.0%', sheetId, startColumn: 1, startRow: incomeRow, type: 'PERCENT' }),
     {
@@ -203,13 +212,16 @@ const monthViewValues = () => {
     rows: [
       { range: `'${MONTH_VIEW_SHEET}'!A2:B2`, values: [['Start', MONTH_START_FORMULA]] },
       {
-        range: `'${MONTH_VIEW_SHEET}'!A4:B${incomeRow + 1}`,
+        range: `'${MONTH_VIEW_SHEET}'!A4:C${incomeRow + 1}`,
         values: [
-          ['Category', 'Amount'],
-          ...summaryCategories.map((category, index) => [category, monthSum({ categoryRef: `$A${firstRow + index}` })]),
-          ['TOTAL EXPENDITURE', `=SUM(B${firstRow}:B${lastRow})`],
-          ['TOTAL INCOME', `=-${monthSum({ categoryRef: `"${INCOME}"` }).slice(1)}`],
-          ['SAVINGS RATE', `=IF(B${incomeRow}>0,1-B${totalRow}/B${incomeRow},"")`],
+          ['Category', 'Amount', '% of spend'],
+          ...summaryCategories.map((category, index) => {
+            const row = firstRow + index;
+            return [category, monthSum({ categoryRef: `$A${row}` }), `=IF($B$${totalRow}>0,B${row}/$B$${totalRow},"")`];
+          }),
+          ['TOTAL EXPENDITURE', `=SUM(B${firstRow}:B${lastRow})`, `=IF($B$${totalRow}>0,1,"")`],
+          ['TOTAL INCOME', `=-${monthSum({ categoryRef: `"${INCOME}"` }).slice(1)}`, ''],
+          ['SAVINGS RATE', `=IF(B${incomeRow}>0,1-B${totalRow}/B${incomeRow},"")`, ''],
         ],
       },
     ],

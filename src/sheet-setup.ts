@@ -9,14 +9,19 @@ export const MONTH_VIEW_SHEET = 'Month View';
 const monthSum = ({ categoryRef }: { categoryRef: string }) =>
   `=SUMIFS(${TRANSACTIONS_SHEET}!$E:$E,${TRANSACTIONS_SHEET}!$F:$F,${categoryRef},${TRANSACTIONS_SHEET}!$A:$A,">="&$B$2,${TRANSACTIONS_SHEET}!$A:$A,"<"&EDATE($B$2,1))`;
 
+const MONTH_VIEW_LIST_RANGE = `'${MONTH_VIEW_SHEET}'!D5`;
+
+const monthViewListFormula = () => {
+  const t = TRANSACTIONS_SHEET;
+  return `=IFERROR(SORT(FILTER({${t}!A:A,${t}!B:B,${t}!C:C,${t}!E:E,${t}!F:F,${t}!G:G},ISNUMBER(${t}!A:A),${t}!A:A>=$B$2,${t}!A:A<EDATE($B$2,1)),1,TRUE),"No transactions")`;
+};
+
 const monthViewValues = () => {
   const summaryCategories = [...BUDGET_CATEGORIES, UNCATEGORIZED];
   const firstRow = 5;
   const lastRow = firstRow + summaryCategories.length - 1;
   const totalRow = lastRow + 1;
   const incomeRow = totalRow + 1;
-  const t = TRANSACTIONS_SHEET;
-
   return {
     rows: [
       { range: `'${MONTH_VIEW_SHEET}'!A1:B2`, values: [['Month (YYYY-MM)', '=TEXT(TODAY(),"yyyy-mm")'], ['Start', '=DATEVALUE(B1&"-01")']] },
@@ -32,12 +37,7 @@ const monthViewValues = () => {
       },
       {
         range: `'${MONTH_VIEW_SHEET}'!D4:I5`,
-        values: [
-          ['Date', 'Account', 'Merchant', 'Amount', 'Category', 'Review'],
-          [
-            `=IFERROR(SORT(FILTER({${t}!A2:A,${t}!B2:B,${t}!C2:C,${t}!E2:E,${t}!F2:F,${t}!G2:G},${t}!A2:A>=$B$2,${t}!A2:A<EDATE($B$2,1)),1,TRUE),"No transactions")`,
-          ],
-        ],
+        values: [['Date', 'Account', 'Merchant', 'Amount', 'Category', 'Review'], [monthViewListFormula()]],
       },
     ],
     totalRow,
@@ -74,6 +74,10 @@ export const ensureSheetSetup = async (sheets: SheetsClient) => {
   const existing = new Set((await sheets.getSheets()).map((sheet) => sheet.title));
   const missing = [TRANSACTIONS_SHEET, RULES_SHEET, MONTH_VIEW_SHEET].filter((title) => !existing.has(title));
   if (missing.length === 0) {
+    await sheets.updateValues({
+      data: [{ range: MONTH_VIEW_LIST_RANGE, values: [[monthViewListFormula()]] }],
+      valueInputOption: 'USER_ENTERED',
+    });
     return;
   }
 

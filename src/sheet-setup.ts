@@ -231,6 +231,19 @@ const CURRENCY = '$#,##0.00;-$#,##0.00';
 const TRANSACTIONS_COLUMN_WIDTHS = [105, 230, 180, 280, 100, 130, 70, 80];
 const HIDDEN_COLUMNS = { end: LEDGER_HEADERS.length, start: 8 };
 const VISIBLE_COLUMN_COUNT = TRANSACTIONS_COLUMN_WIDTHS.length;
+const MONTH_COLUMN = { index: LEDGER_HEADERS.length, letter: 'M' };
+const FILTERED_COLUMN_COUNT = MONTH_COLUMN.index + 1;
+const SLICERS = [
+  { columnIndex: MONTH_COLUMN.index, title: 'Month' },
+  { columnIndex: 5, title: 'Category' },
+  { columnIndex: 1, title: 'Account' },
+  { columnIndex: 6, title: 'Needs review' },
+  { columnIndex: 7, title: 'Status' },
+];
+const SLICER_ROWS_APART = 3;
+
+const monthColumnFormula = () =>
+  `=ARRAYFORMULA(IF(ROW(A:A)=1,"Month",IF(ISNUMBER(A:A),TEXT(A:A,"yyyy-mm"),"")))`;
 
 const hexColor = (hex: string) => ({
   blue: parseInt(hex.slice(5, 7), 16) / 255,
@@ -259,7 +272,11 @@ export const formatTransactionsSheet = async (sheets: SheetsClient) => {
   if (!details) {
     return { formatted: false };
   }
-  const { bandedRangeIds, conditionalFormatCount, sheetId } = details;
+  const { bandedRangeIds, conditionalFormatCount, sheetId, slicerIds } = details;
+  await sheets.updateValues({
+    data: [{ range: `${TRANSACTIONS_SHEET}!${MONTH_COLUMN.letter}1`, values: [[monthColumnFormula()]] }],
+    valueInputOption: 'USER_ENTERED',
+  });
   const monthViewId = (await sheets.getSheets()).find((sheet) => sheet.title === MONTH_VIEW_SHEET)?.sheetId;
 
   await sheets.batchUpdate([
@@ -269,6 +286,7 @@ export const formatTransactionsSheet = async (sheets: SheetsClient) => {
       ? []
       : [numberFormat({ endColumn: 4, pattern: FRIENDLY_DATE, sheetId: monthViewId, startColumn: 3, startRow: 4, type: 'DATE' })]),
     ...bandedRangeIds.map((bandedRangeId) => ({ deleteBanding: { bandedRangeId } })),
+    ...slicerIds.map((objectId) => ({ deleteEmbeddedObject: { objectId } })),
     ...Array.from({ length: conditionalFormatCount }, (_, offset) => ({
       deleteConditionalFormatRule: { index: conditionalFormatCount - 1 - offset, sheetId },
     })),
@@ -320,7 +338,32 @@ export const formatTransactionsSheet = async (sheets: SheetsClient) => {
     rowHighlight({ formula: '=$E2<0', sheetId, textColor: '#15803d' }),
     rowHighlight({ formula: '=$F2="Transfer"', sheetId, textColor: '#9ca3af' }),
     rowHighlight({ background: '#fef3c7', formula: '=$G2=TRUE', sheetId }),
-    { setBasicFilter: { filter: { range: { endColumnIndex: VISIBLE_COLUMN_COUNT, sheetId, startColumnIndex: 0, startRowIndex: 0 } } } },
+    {
+      updateDimensionProperties: {
+        fields: 'pixelSize,hiddenByUser',
+        properties: { hiddenByUser: false, pixelSize: 80 },
+        range: { dimension: 'COLUMNS', endIndex: MONTH_COLUMN.index + 1, sheetId, startIndex: MONTH_COLUMN.index },
+      },
+    },
+    { setBasicFilter: { filter: { range: { endColumnIndex: FILTERED_COLUMN_COUNT, sheetId, startColumnIndex: 0, startRowIndex: 0 } } } },
+    ...SLICERS.map(({ columnIndex, title }, index) => ({
+      addSlicer: {
+        slicer: {
+          position: {
+            overlayPosition: {
+              anchorCell: { columnIndex: FILTERED_COLUMN_COUNT + 1, rowIndex: index * SLICER_ROWS_APART, sheetId },
+              heightPixels: 52,
+              widthPixels: 220,
+            },
+          },
+          spec: {
+            columnIndex,
+            dataRange: { endColumnIndex: FILTERED_COLUMN_COUNT, sheetId, startColumnIndex: 0, startRowIndex: 0 },
+            title,
+          },
+        },
+      },
+    })),
   ]);
 
   if (monthViewId !== undefined) {

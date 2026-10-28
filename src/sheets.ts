@@ -52,8 +52,9 @@ export const createSheetsClient = ({
           bandedRanges?: { bandedRangeId: number }[];
           conditionalFormats?: unknown[];
           properties: { sheetId: number; title: string };
+          slicers?: { slicerId: number }[];
         }[];
-      }>('?fields=sheets(properties(sheetId,title),bandedRanges(bandedRangeId),conditionalFormats)');
+      }>('?fields=sheets(properties(sheetId,title),bandedRanges(bandedRangeId),conditionalFormats,slicers(slicerId))');
       const sheet = sheets.find((candidate) => candidate.properties.title === title);
       if (!sheet) {
         return undefined;
@@ -62,6 +63,7 @@ export const createSheetsClient = ({
         bandedRangeIds: (sheet.bandedRanges ?? []).map((banded) => banded.bandedRangeId),
         conditionalFormatCount: sheet.conditionalFormats?.length ?? 0,
         sheetId: sheet.properties.sheetId,
+        slicerIds: (sheet.slicers ?? []).map((slicer) => slicer.slicerId),
       };
     },
 

@@ -15,6 +15,7 @@ const ALL = 'All';
 const REVIEW_OPTIONS = [ALL, 'Needs review', 'Reviewed'];
 const STATUS_OPTIONS = [ALL, 'Posted', 'Pending'];
 const MONTHS_HELPER_COLUMN = 'L';
+const MONTH_START_FORMULA = '=IF(ISNUMBER(B1),DATE(YEAR(B1),MONTH(B1),1),DATEVALUE(B1&"-01"))';
 
 const monthViewListFormula = () => {
   const t = TRANSACTIONS_SHEET;
@@ -52,6 +53,7 @@ export const setUpMonthViewControls = async ({ sheetId, sheets }: { sheetId: num
   });
   await sheets.updateValues({
     data: [
+      { range: `'${MONTH_VIEW_SHEET}'!A2:B2`, values: [['Start', MONTH_START_FORMULA]] },
       { range: `'${MONTH_VIEW_SHEET}'!D4:J4`, values: [MONTH_VIEW_LIST_HEADERS] },
       { range: MONTH_VIEW_LIST_RANGE, values: [[monthViewListFormula()]] },
       { range: `'${MONTH_VIEW_SHEET}'!${MONTHS_HELPER_COLUMN}5`, values: [[monthsHelperFormula()]] },
@@ -61,6 +63,13 @@ export const setUpMonthViewControls = async ({ sheetId, sheets }: { sheetId: num
   const helperColumnIndex = MONTHS_HELPER_COLUMN.charCodeAt(0) - 'A'.charCodeAt(0);
   const controlCells = [1, 4, 6, 8];
   await sheets.batchUpdate([
+    {
+      repeatCell: {
+        cell: { userEnteredFormat: { numberFormat: { pattern: '@', type: 'TEXT' } } },
+        fields: 'userEnteredFormat.numberFormat',
+        range: { endColumnIndex: 2, endRowIndex: 1, sheetId, startColumnIndex: 1, startRowIndex: 0 },
+      },
+    },
     {
       setDataValidation: {
         range: { endColumnIndex: 2, endRowIndex: 1, sheetId, startColumnIndex: 1, startRowIndex: 0 },
@@ -120,7 +129,7 @@ const monthViewValues = () => {
   const incomeRow = totalRow + 1;
   return {
     rows: [
-      { range: `'${MONTH_VIEW_SHEET}'!A2:B2`, values: [['Start', '=DATEVALUE(B1&"-01")']] },
+      { range: `'${MONTH_VIEW_SHEET}'!A2:B2`, values: [['Start', MONTH_START_FORMULA]] },
       {
         range: `'${MONTH_VIEW_SHEET}'!A4:B${incomeRow + 1}`,
         values: [

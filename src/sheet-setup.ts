@@ -10,17 +10,19 @@ export const MONTH_VIEW_SHEET = 'Month View';
 const monthSum = ({ categoryRef }: { categoryRef: string }) =>
   `=SUMIFS(${TRANSACTIONS_SHEET}!$E:$E,${TRANSACTIONS_SHEET}!$F:$F,${categoryRef},${TRANSACTIONS_SHEET}!$A:$A,">="&$B$2,${TRANSACTIONS_SHEET}!$A:$A,"<"&EDATE($B$2,1))`;
 
-const MONTH_VIEW_LIST_RANGE = `'${MONTH_VIEW_SHEET}'!D5`;
+const MONTH_VIEW_LIST_RANGE = `'${MONTH_VIEW_SHEET}'!E5`;
+const LIST_COLUMNS = { end: 11, start: 4 };
+const MONTH_VIEW_LAST_COLUMN = 17;
 const MONTH_VIEW_LIST_HEADERS = ['Date', 'Account', 'Merchant', 'Amount', 'Category', 'Review', 'Status'];
 const ALL = 'All';
 const REVIEW_OPTIONS = [ALL, 'Needs review', 'Reviewed'];
 const STATUS_OPTIONS = [ALL, 'Posted', 'Pending'];
-const FILTER_LABEL_COLUMN = 11;
-const FILTER_VALUE_COLUMN = 12;
+const FILTER_LABEL_COLUMN = 12;
+const FILTER_VALUE_COLUMN = 13;
 const FILTERS = ['Month', 'Category', 'Account', 'Review', 'Status'] as const;
-const filterCell = (filter: (typeof FILTERS)[number]) => `$M$${FILTERS.indexOf(filter) + 2}`;
-const MONTHS_HELPER = { column: 'O', index: 14 };
-const ACCOUNTS_HELPER = { column: 'P', index: 15 };
+const filterCell = (filter: (typeof FILTERS)[number]) => `$N$${FILTERS.indexOf(filter) + 2}`;
+const MONTHS_HELPER = { column: 'P', index: 15 };
+const ACCOUNTS_HELPER = { column: 'Q', index: 16 };
 const MONTH = filterCell('Month');
 const MONTH_START_FORMULA = `=IF(ISNUMBER(${MONTH}),DATE(YEAR(${MONTH}),MONTH(${MONTH}),1),DATEVALUE(${MONTH}&"-01"))`;
 
@@ -104,7 +106,7 @@ const styleMonthView = async ({ sheets, sheetId }: { sheetId: number; sheets: Sh
       repeatCell: {
         cell: { userEnteredFormat: { textFormat: { fontSize: 10 }, verticalAlignment: 'MIDDLE' } },
         fields: 'userEnteredFormat(textFormat.fontSize,verticalAlignment)',
-        range: { endColumnIndex: 13, sheetId, startColumnIndex: 0, startRowIndex: 0 },
+        range: { endColumnIndex: FILTER_VALUE_COLUMN + 1, sheetId, startColumnIndex: 0, startRowIndex: 0 },
       },
     },
     {
@@ -132,7 +134,7 @@ const styleMonthView = async ({ sheets, sheetId }: { sheetId: number; sheets: Sh
     {
       addBanding: {
         bandedRange: {
-          range: { endColumnIndex: 10, sheetId, startColumnIndex: 3, startRowIndex: 3 },
+          range: { endColumnIndex: LIST_COLUMNS.end, sheetId, startColumnIndex: LIST_COLUMNS.start, startRowIndex: 3 },
           rowProperties: { firstBandColor: hexColor('#ffffff'), headerColor: header, secondBandColor: hexColor('#f8fafc') },
         },
       },
@@ -141,7 +143,7 @@ const styleMonthView = async ({ sheets, sheetId }: { sheetId: number; sheets: Sh
       repeatCell: {
         cell: { userEnteredFormat: { textFormat: { bold: true, foregroundColor: hexColor('#111827') } } },
         fields: 'userEnteredFormat(textFormat.bold,textFormat.foregroundColor)',
-        range: { endColumnIndex: 10, sheetId, startColumnIndex: 0, ...row(4) },
+        range: { endColumnIndex: LIST_COLUMNS.end, sheetId, startColumnIndex: 0, ...row(4) },
       },
     },
     {
@@ -205,7 +207,8 @@ const styleMonthView = async ({ sheets, sheetId }: { sheetId: number; sheets: Sh
     columnProperties({ index: 0, pixelSize: 170, sheetId }),
     columnProperties({ index: 1, pixelSize: 110, sheetId }),
     columnProperties({ index: 2, pixelSize: 90, sheetId }),
-    columnProperties({ index: 10, pixelSize: 24, sheetId }),
+    columnProperties({ index: LIST_COLUMNS.start - 1, pixelSize: 28, sheetId }),
+    columnProperties({ index: LIST_COLUMNS.end, pixelSize: 28, sheetId }),
     {
       updateDimensionProperties: {
         fields: 'pixelSize',
@@ -218,13 +221,22 @@ const styleMonthView = async ({ sheets, sheetId }: { sheetId: number; sheets: Sh
 
 export const setUpMonthViewControls = async ({ sheetId, sheets }: { sheetId: number; sheets: SheetsClient }) => {
   const currentMonth = new Date().toISOString().slice(0, 7);
+  const rightSide = { endColumnIndex: MONTH_VIEW_LAST_COLUMN, sheetId, startColumnIndex: LIST_COLUMNS.start - 1, startRowIndex: 0 };
+  await sheets.clearValues(`'${MONTH_VIEW_SHEET}'!D1:Q`);
   await sheets.batchUpdate([
-    { setDataValidation: { range: { endColumnIndex: 16, endRowIndex: 1, sheetId, startColumnIndex: 0, startRowIndex: 0 } } },
+    { setDataValidation: { range: rightSide } },
+    { repeatCell: { cell: { userEnteredFormat: {} }, fields: 'userEnteredFormat', range: rightSide } },
+    { updateBorders: { bottom: { style: 'NONE' }, innerHorizontal: { style: 'NONE' }, innerVertical: { style: 'NONE' }, left: { style: 'NONE' }, range: rightSide, right: { style: 'NONE' }, top: { style: 'NONE' } } },
+    numberFormat({ endColumn: LIST_COLUMNS.start + 1, pattern: FRIENDLY_DATE, sheetId, startColumn: LIST_COLUMNS.start, startRow: 4, type: 'DATE' }),
+    numberFormat({ endColumn: LIST_COLUMNS.start + 4, pattern: '$#,##0.00;-$#,##0.00', sheetId, startColumn: LIST_COLUMNS.start + 3, startRow: 4, type: 'CURRENCY' }),
+  ]);
+  await sheets.batchUpdate([
+    { setDataValidation: { range: { endColumnIndex: MONTH_VIEW_LAST_COLUMN, endRowIndex: 1, sheetId, startColumnIndex: 0, startRowIndex: 0 } } },
     {
       repeatCell: {
         cell: { userEnteredFormat: {} },
         fields: 'userEnteredFormat(backgroundColor,numberFormat)',
-        range: { endColumnIndex: 16, endRowIndex: 1, sheetId, startColumnIndex: 0, startRowIndex: 0 },
+        range: { endColumnIndex: MONTH_VIEW_LAST_COLUMN, endRowIndex: 1, sheetId, startColumnIndex: 0, startRowIndex: 0 },
       },
     },
     {
@@ -237,16 +249,15 @@ export const setUpMonthViewControls = async ({ sheetId, sheets }: { sheetId: num
   ]);
   await sheets.updateValues({
     data: [
-      { range: `'${MONTH_VIEW_SHEET}'!C1:P1`, values: [Array.from({ length: 14 }, () => '')] },
-      { range: `'${MONTH_VIEW_SHEET}'!L1`, values: [['Filters']] },
-      { range: `'${MONTH_VIEW_SHEET}'!L2:M6`, values: FILTERS.map((filter) => [filter, filter === 'Month' ? currentMonth : ALL]) },
+      { range: `'${MONTH_VIEW_SHEET}'!M1`, values: [['Filters']] },
+      { range: `'${MONTH_VIEW_SHEET}'!M2:N6`, values: FILTERS.map((filter) => [filter, filter === 'Month' ? currentMonth : ALL]) },
     ],
     valueInputOption: 'RAW',
   });
   await sheets.updateValues({
     data: [
       { range: `'${MONTH_VIEW_SHEET}'!A1:B2`, values: [['Month', `=${MONTH}`], ['Start', MONTH_START_FORMULA]] },
-      { range: `'${MONTH_VIEW_SHEET}'!D4:J4`, values: [MONTH_VIEW_LIST_HEADERS] },
+      { range: `'${MONTH_VIEW_SHEET}'!E4:K4`, values: [MONTH_VIEW_LIST_HEADERS] },
       { range: MONTH_VIEW_LIST_RANGE, values: [[monthViewListFormula()]] },
       { range: `'${MONTH_VIEW_SHEET}'!${MONTHS_HELPER.column}2`, values: [[monthsHelperFormula()]] },
       { range: `'${MONTH_VIEW_SHEET}'!${ACCOUNTS_HELPER.column}2`, values: [[accountsHelperFormula()]] },
@@ -263,7 +274,7 @@ export const setUpMonthViewControls = async ({ sheetId, sheets }: { sheetId: num
       repeatCell: {
         cell: { userEnteredFormat: { textFormat: { bold: false } } },
         fields: 'userEnteredFormat.textFormat.bold',
-        range: { endColumnIndex: 16, endRowIndex: 1, sheetId, startColumnIndex: 0, startRowIndex: 0 },
+        range: { endColumnIndex: MONTH_VIEW_LAST_COLUMN, endRowIndex: 1, sheetId, startColumnIndex: 0, startRowIndex: 0 },
       },
     },
     {
@@ -294,7 +305,7 @@ export const setUpMonthViewControls = async ({ sheetId, sheets }: { sheetId: num
         range: { endColumnIndex: FILTER_VALUE_COLUMN + 1, endRowIndex: FILTERS.length + 1, sheetId, startColumnIndex: FILTER_VALUE_COLUMN, startRowIndex: 1 },
       },
     },
-    ...[95, 230, 180, 100, 130, 70, 80].map((pixelSize, index) => columnProperties({ index: index + 3, pixelSize, sheetId })),
+    ...[95, 230, 180, 100, 130, 70, 80].map((pixelSize, index) => columnProperties({ index: index + LIST_COLUMNS.start, pixelSize, sheetId })),
     columnProperties({ hidden: false, index: FILTER_LABEL_COLUMN, pixelSize: 80, sheetId }),
     columnProperties({ index: FILTER_VALUE_COLUMN, pixelSize: 230, sheetId }),
     columnProperties({ hidden: true, index: MONTHS_HELPER.index, sheetId }),
@@ -603,7 +614,7 @@ export const formatTransactionsSheet = async (sheets: SheetsClient) => {
     numberFormat({ endColumn: 5, pattern: CURRENCY, sheetId, startColumn: 4, startRow: 1, type: 'CURRENCY' }),
     ...(monthViewId === undefined
       ? []
-      : [numberFormat({ endColumn: 4, pattern: FRIENDLY_DATE, sheetId: monthViewId, startColumn: 3, startRow: 4, type: 'DATE' })]),
+      : [numberFormat({ endColumn: LIST_COLUMNS.start + 1, pattern: FRIENDLY_DATE, sheetId: monthViewId, startColumn: LIST_COLUMNS.start, startRow: 4, type: 'DATE' })]),
     ...bandedRangeIds.map((bandedRangeId) => ({ deleteBanding: { bandedRangeId } })),
     ...slicerIds.map((objectId) => ({ deleteEmbeddedObject: { objectId } })),
     ...Array.from({ length: conditionalFormatCount }, (_, offset) => ({
@@ -783,8 +794,8 @@ export const ensureSheetSetup = async (sheets: SheetsClient) => {
       numberFormat({ endColumn: 2, endRow: 2, pattern: 'yyyy-mm-dd', sheetId: monthViewId, startColumn: 1, startRow: 1, type: 'DATE' }),
       numberFormat({ endColumn: 2, endRow: incomeRow, pattern: '$#,##0.00', sheetId: monthViewId, startColumn: 1, startRow: firstRow - 1, type: 'CURRENCY' }),
       numberFormat({ endColumn: 2, endRow: incomeRow + 1, pattern: '0.0%', sheetId: monthViewId, startColumn: 1, startRow: incomeRow, type: 'PERCENT' }),
-      numberFormat({ endColumn: 4, pattern: FRIENDLY_DATE, sheetId: monthViewId, startColumn: 3, startRow: 4, type: 'DATE' }),
-      numberFormat({ endColumn: 7, pattern: '$#,##0.00;-$#,##0.00', sheetId: monthViewId, startColumn: 6, startRow: 4, type: 'CURRENCY' }),
+      numberFormat({ endColumn: LIST_COLUMNS.start + 1, pattern: FRIENDLY_DATE, sheetId: monthViewId, startColumn: LIST_COLUMNS.start, startRow: 4, type: 'DATE' }),
+      numberFormat({ endColumn: LIST_COLUMNS.start + 4, pattern: '$#,##0.00;-$#,##0.00', sheetId: monthViewId, startColumn: LIST_COLUMNS.start + 3, startRow: 4, type: 'CURRENCY' }),
     ]);
   }
 };

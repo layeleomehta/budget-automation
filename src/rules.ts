@@ -1,5 +1,5 @@
 import { type Category, isCategory } from './categories';
-import type { NormalizedTransaction } from './teller';
+import type { NormalizedTransaction } from './plaid';
 
 export type Rule = { category: Category; pattern: string };
 

@@ -1,6 +1,6 @@
 # budget-automation
 
-Cloudflare Worker that pulls bank and card transactions from Teller every hour, categorizes them, and writes them to the budget Google Sheet.
+Cloudflare Worker that pulls bank and card transactions from Plaid, categorizes them, and writes them to the budget Google Sheet. It syncs whenever Plaid sends a transactions webhook, and hourly as a fallback.
 
 - **Transactions** tab: append-only ledger. Change a row's Category to correct it; the next sync marks it `manual`, clears Review, and adds a merchant rule.
 - **Rules** tab: `Pattern → Category`, case-insensitive substring match, longest pattern wins. Edit freely.
@@ -12,24 +12,21 @@ Amounts are spending-positive: purchases are positive, refunds/reimbursements/pa
 ## Setup
 
 1. `pnpm install`
-2. **Teller**: create an application at teller.io and download the certificate and private key.
+2. **Google**: in a GCP project, enable the Sheets API, create a service account and a JSON key, and share the budget sheet with the service account's email as Editor.
+3. **Secrets**:
    ```
-   pnpm wrangler mtls-certificate upload --cert certificate.pem --key private_key.pem --name teller
-   ```
-   Put the returned id in `wrangler.jsonc` (`TELLER_CERT`) and set `TELLER_APPLICATION_ID`.
-3. **KV**: `pnpm wrangler kv namespace create ENROLLMENTS` and put the id in `wrangler.jsonc`.
-4. **Google**: in a GCP project, enable the Sheets API, create a service account and a JSON key, and share the budget sheet with the service account's email as Editor.
-5. **Secrets**:
-   ```
+   pnpm wrangler secret put PLAID_CLIENT_ID
+   pnpm wrangler secret put PLAID_SECRET                  # production secret
    pnpm wrangler secret put GOOGLE_SERVICE_ACCOUNT_JSON   # paste the whole JSON key
    pnpm wrangler secret put ANTHROPIC_API_KEY
    pnpm wrangler secret put ADMIN_KEY                     # any long random string
    pnpm wrangler secret put SPREADSHEET_ID                # the id from the sheet URL
    ```
-6. `pnpm run deploy`
-7. Open `https://budget-automation.<subdomain>.workers.dev/connect?key=<ADMIN_KEY>` and connect Chase.
-8. Check amount signs: open `/preview?key=<ADMIN_KEY>&days=14`. Purchases should have a positive `spend`. If a whole account type is backwards, flip `CREDIT_SPEND_SIGN` or `DEPOSITORY_SPEND_SIGN` and redeploy.
-9. Backfill: `curl -X POST 'https://…/sync?key=<ADMIN_KEY>&days=90'`. After that the hourly cron syncs the last 14 days.
+4. Deploy by pushing to `main` (GitHub Actions), or `pnpm run deploy`.
+5. Open `https://budget-automation.<subdomain>.workers.dev/connect?key=<ADMIN_KEY>` and connect each bank. The Plaid webhook is registered automatically.
+6. Run the first sync: `curl -X POST 'https://…/sync?key=<ADMIN_KEY>'`. The first sync pulls the last 90 days.
+
+If a bank needs you to log in again, `GET /items?key=…` lists connected items; open `/connect?key=…&item=<itemId>` to repair it without using a new Plaid Item.
 
 ## Development
 

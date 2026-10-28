@@ -1,72 +1,67 @@
 import { type Categorization, categorizeWithLlm, categorizeWithoutLlm, LLM_FAILURE } from './categorize';
 import { createGoogleTokenProvider } from './google-auth';
 import { findCorrections, isoDateToSerial, parseLedgerRows, planSync, toLedgerValues, TRANSACTIONS_SHEET } from './ledger';
-import { parseRules } from './rules';
+import { createPlaidClient, type NormalizedTransaction, normalizeTransaction } from './plaid';
+import { parseRules, type Rule } from './rules';
 import { ensureSheetSetup, RULES_SHEET } from './sheet-setup';
 import { createSheetsClient } from './sheets';
-import { accountLabel, createTellerClient, type NormalizedTransaction, normalizeTransaction, type TellerAccount } from './teller';
 
 export type Env = {
   ADMIN_KEY: string;
   ANTHROPIC_API_KEY: string;
-  CREDIT_SPEND_SIGN: string;
-  DEPOSITORY_SPEND_SIGN: string;
-  ENROLLMENTS: KVNamespace;
+  BUDGET_STATE: KVNamespace;
   GOOGLE_SERVICE_ACCOUNT_JSON: string;
+  PLAID_CLIENT_ID: string;
+  PLAID_ENV: string;
+  PLAID_SECRET: string;
   SPREADSHEET_ID: string;
-  TELLER_APPLICATION_ID: string;
-  TELLER_CERT: Fetcher;
-  TELLER_ENVIRONMENT: string;
 };
 
-export type Enrollment = { accessToken: string; enrollmentId: string; institution: string };
+export type Item = { accessToken: string; cursor?: string; institution: string; itemId: string };
 
-const ENROLLMENT_PREFIX = 'enrollment:';
+const ITEM_PREFIX = 'item:';
 
-export const saveEnrollment = ({ enrollment, env }: { enrollment: Enrollment; env: Env }) =>
-  env.ENROLLMENTS.put(`${ENROLLMENT_PREFIX}${enrollment.enrollmentId}`, JSON.stringify(enrollment));
+export const plaidClient = (env: Env) =>
+  createPlaidClient({ clientId: env.PLAID_CLIENT_ID, environment: env.PLAID_ENV, secret: env.PLAID_SECRET });
 
-const listEnrollments = async (env: Env) => {
-  const { keys } = await env.ENROLLMENTS.list({ prefix: ENROLLMENT_PREFIX });
-  const values = await Promise.all(keys.map((key) => env.ENROLLMENTS.get<Enrollment>(key.name, 'json')));
-  return values.filter((value): value is Enrollment => value !== null);
+export const saveItem = ({ env, item }: { env: Env; item: Item }) =>
+  env.BUDGET_STATE.put(`${ITEM_PREFIX}${item.itemId}`, JSON.stringify(item));
+
+export const getItem = ({ env, itemId }: { env: Env; itemId: string }) =>
+  env.BUDGET_STATE.get<Item>(`${ITEM_PREFIX}${itemId}`, 'json');
+
+export const listItems = async (env: Env) => {
+  const { keys } = await env.BUDGET_STATE.list({ prefix: ITEM_PREFIX });
+  const values = await Promise.all(keys.map((key) => env.BUDGET_STATE.get<Item>(key.name, 'json')));
+  return values.filter((value): value is Item => value !== null);
 };
 
-const daysAgo = (days: number) => new Date(Date.now() - days * 86_400_000).toISOString().slice(0, 10);
-
-const spendSign = ({ account, env }: { account: TellerAccount; env: Env }) =>
-  Number(account.type === 'credit' ? env.CREDIT_SPEND_SIGN : env.DEPOSITORY_SPEND_SIGN);
-
-export const fetchTransactions = async ({ env, startDate }: { env: Env; startDate: string }) => {
-  const transactions: NormalizedTransaction[] = [];
-  const syncedAccounts = new Set<string>();
+export const fetchChanges = async (env: Env) => {
+  const plaid = plaidClient(env);
+  const added: NormalizedTransaction[] = [];
+  const modified: NormalizedTransaction[] = [];
+  const removed: string[] = [];
+  const cursors: { item: Item; nextCursor: string }[] = [];
   const errors: string[] = [];
 
-  for (const enrollment of await listEnrollments(env)) {
+  for (const item of await listItems(env)) {
     try {
-      const teller = createTellerClient({
-        accessToken: enrollment.accessToken,
-        fetcher: (input, init) => env.TELLER_CERT.fetch(input, init),
-      });
-      const accounts = (await teller.listAccounts()).filter((account) => account.status === 'open');
-      const perAccount = await Promise.all(
-        accounts.map(async (account) => {
-          const raw = await teller.listTransactions({ accountId: account.id, startDate });
-          return { account, raw };
-        }),
-      );
-      for (const { account, raw } of perAccount) {
-        syncedAccounts.add(accountLabel(account));
-        transactions.push(...raw.map((transaction) => normalizeTransaction({ account, spendSign: spendSign({ account, env }), transaction })));
-      }
+      const changes = await plaid.syncTransactions({ accessToken: item.accessToken, cursor: item.cursor });
+      const accounts = new Map(changes.accounts.map((account) => [account.account_id, account]));
+      const normalize = (transaction: (typeof changes.added)[number]) =>
+        normalizeTransaction({ account: accounts.get(transaction.account_id), institution: item.institution, transaction });
+      added.push(...changes.added.map(normalize));
+      modified.push(...changes.modified.map(normalize));
+      removed.push(...changes.removed);
+      cursors.push({ item, nextCursor: changes.nextCursor });
     } catch (error) {
-      const message = `Teller sync failed for ${enrollment.institution} (${enrollment.enrollmentId}): ${String(error)}`;
+      const message = `Plaid sync failed for ${item.institution} (${item.itemId}): ${String(error)}`;
       console.error(message);
       errors.push(message);
     }
   }
 
-  return { errors, syncedAccounts, transactions };
+  return { added, cursors, errors, modified, removed };
 };
 
 const categorizeAll = async ({
@@ -75,7 +70,7 @@ const categorizeAll = async ({
   transactions,
 }: {
   apiKey: string;
-  rules: ReturnType<typeof parseRules>;
+  rules: Rule[];
   transactions: NormalizedTransaction[];
 }) => {
   const results = new Map<string, Categorization>();
@@ -97,7 +92,7 @@ const categorizeAll = async ({
   return results;
 };
 
-export const runSync = async ({ days, env }: { days: number; env: Env }) => {
+export const runSync = async (env: Env) => {
   const sheets = createSheetsClient({
     getAccessToken: createGoogleTokenProvider(env.GOOGLE_SERVICE_ACCOUNT_JSON),
     spreadsheetId: env.SPREADSHEET_ID,
@@ -128,15 +123,15 @@ export const runSync = async ({ days, env }: { days: number; env: Env }) => {
   }
   const rules = [...existingRules, ...newRules];
 
-  const windowStart = daysAgo(days);
-  const { errors, syncedAccounts, transactions } = await fetchTransactions({ env, startDate: windowStart });
-  const plan = planSync({ fetched: transactions, ledger, syncedAccounts, windowStart });
+  const { added, cursors, errors, modified, removed } = await fetchChanges(env);
+  const plan = planSync({ added, ledger, modified, removed });
 
   await sheets.updateValues({
     data: plan.updates.flatMap(({ rowNumber, transaction }) => [
       { range: `${TRANSACTIONS_SHEET}!A${rowNumber}`, values: [[isoDateToSerial(transaction.date)]] },
       { range: `${TRANSACTIONS_SHEET}!E${rowNumber}`, values: [[transaction.spend]] },
       { range: `${TRANSACTIONS_SHEET}!H${rowNumber}`, values: [[transaction.status]] },
+      { range: `${TRANSACTIONS_SHEET}!K${rowNumber}`, values: [[transaction.id]] },
     ]),
     valueInputOption: 'RAW',
   });
@@ -163,6 +158,8 @@ export const runSync = async ({ days, env }: { days: number; env: Env }) => {
         })),
     );
   }
+
+  await Promise.all(cursors.map(({ item, nextCursor }) => saveItem({ env, item: { ...item, cursor: nextCursor } })));
 
   return {
     corrected: corrections.length,

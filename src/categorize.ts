@@ -1,13 +1,15 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { zodOutputFormat } from '@anthropic-ai/sdk/helpers/zod';
 import { z } from 'zod';
-import { ALL_CATEGORIES, type Category, INCOME, UNCATEGORIZED } from './categories';
+import { ALL_CATEGORIES, type Category, INCOME, TRANSFER, UNCATEGORIZED } from './categories';
+import type { NormalizedTransaction } from './plaid';
 import { isVenmo, matchRule, type Rule } from './rules';
-import type { NormalizedTransaction } from './teller';
 
-export type CategorizationSource = 'llm' | 'llm-error' | 'manual' | 'rule' | 'teller' | 'venmo';
+export type CategorizationSource = 'bank' | 'llm' | 'llm-error' | 'manual' | 'rule' | 'venmo';
 
 export type Categorization = { category: Category; review: boolean; source: CategorizationSource };
+
+const CREDIT_CARD_PAYMENT = 'LOAN_PAYMENTS_CREDIT_CARD_PAYMENT';
 
 export const categorizeWithoutLlm = ({
   rules,
@@ -19,12 +21,19 @@ export const categorizeWithoutLlm = ({
   if (isVenmo(transaction)) {
     return { category: UNCATEGORIZED, review: true, source: 'venmo' };
   }
+  if (transaction.bankCategory === CREDIT_CARD_PAYMENT) {
+    return { category: TRANSFER, review: false, source: 'bank' };
+  }
   const rule = matchRule({ rules, transaction });
   if (rule) {
     return { category: rule.category, review: false, source: 'rule' };
   }
-  if (transaction.accountType === 'depository' && transaction.spend < 0 && transaction.tellerCategory === 'income') {
-    return { category: INCOME, review: false, source: 'teller' };
+  if (
+    transaction.accountType === 'depository' &&
+    transaction.spend < 0 &&
+    transaction.bankCategory?.startsWith('INCOME')
+  ) {
+    return { category: INCOME, review: false, source: 'bank' };
   }
   return undefined;
 };
@@ -80,7 +89,7 @@ export const categorizeWithLlm = async ({
     const batch = transactions.slice(start, start + LLM_BATCH_SIZE).map((transaction) => ({
       account: transaction.accountType,
       amount: transaction.spend,
-      bankCategory: transaction.tellerCategory,
+      bankCategory: transaction.bankCategory,
       description: transaction.description,
       id: transaction.id,
       merchant: transaction.merchant,

@@ -1,7 +1,7 @@
 import { type Category, isCategory, UNCATEGORIZED } from './categories';
 import type { Categorization } from './categorize';
 import { isVenmo, merchantKey, type Rule } from './rules';
-import type { NormalizedTransaction } from './teller';
+import type { NormalizedTransaction } from './plaid';
 
 export const TRANSACTIONS_SHEET = 'Transactions';
 
@@ -93,45 +93,48 @@ export type SyncPlan = {
   updates: { rowNumber: number; transaction: NormalizedTransaction }[];
 };
 
+const rowChanged = ({ row, transaction }: { row: LedgerRow; transaction: NormalizedTransaction }) =>
+  row.id !== transaction.id ||
+  row.date !== transaction.date ||
+  row.status !== transaction.status ||
+  Math.abs(row.amount - transaction.spend) >= 0.005;
+
 export const planSync = ({
-  fetched,
+  added,
   ledger,
-  syncedAccounts,
-  windowStart,
+  modified,
+  removed,
 }: {
-  fetched: NormalizedTransaction[];
+  added: NormalizedTransaction[];
   ledger: LedgerRow[];
-  syncedAccounts: Set<string>;
-  windowStart: string;
+  modified: NormalizedTransaction[];
+  removed: string[];
 }): SyncPlan => {
   const ledgerById = new Map(ledger.map((row) => [row.id, row]));
-  const fetchedIds = new Set(fetched.map((transaction) => transaction.id));
+  const incoming = new Map([...added, ...modified].map((transaction) => [transaction.id, transaction]));
+  const replacedPendingIds = new Set<string>();
   const plan: SyncPlan = { deletes: [], inserts: [], updates: [] };
 
-  for (const transaction of fetched) {
-    const existing = ledgerById.get(transaction.id);
+  for (const transaction of incoming.values()) {
+    const existing =
+      ledgerById.get(transaction.id) ??
+      (transaction.pendingTransactionId ? ledgerById.get(transaction.pendingTransactionId) : undefined);
     if (!existing) {
       plan.inserts.push(transaction);
       continue;
     }
-    const changed =
-      existing.date !== transaction.date ||
-      existing.status !== transaction.status ||
-      Math.abs(existing.amount - transaction.spend) >= 0.005;
-    if (changed) {
+    if (existing.id !== transaction.id) {
+      replacedPendingIds.add(existing.id);
+    }
+    if (rowChanged({ row: existing, transaction })) {
       plan.updates.push({ rowNumber: existing.rowNumber, transaction });
     }
   }
 
-  plan.deletes = ledger
-    .filter(
-      (row) =>
-        row.status === 'pending' &&
-        row.date >= windowStart &&
-        syncedAccounts.has(row.account) &&
-        !fetchedIds.has(row.id),
-    )
-    .map((row) => row.rowNumber);
+  plan.deletes = removed.flatMap((id) => {
+    const row = ledgerById.get(id);
+    return row && !replacedPendingIds.has(id) ? [row.rowNumber] : [];
+  });
 
   return plan;
 };

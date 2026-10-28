@@ -4,12 +4,8 @@
   "compatibility_date": "2026-09-01",
   "compatibility_flags": ["nodejs_compat"],
   "triggers": { "crons": ["0 * * * *"] },
-  "kv_namespaces": [{ "binding": "ENROLLMENTS", "id": "REPLACE_WITH_KV_NAMESPACE_ID" }],
-  "mtls_certificates": [{ "binding": "TELLER_CERT", "certificate_id": "REPLACE_WITH_TELLER_CERT_ID" }],
+  "kv_namespaces": [{ "binding": "BUDGET_STATE", "id": "6046fb666810458b9efb545c69a53d03" }],
   "vars": {
-    "TELLER_APPLICATION_ID": "REPLACE_WITH_TELLER_APP_ID",
-    "TELLER_ENVIRONMENT": "development",
-    "DEPOSITORY_SPEND_SIGN": "-1",
-    "CREDIT_SPEND_SIGN": "-1"
+    "PLAID_ENV": "production"
   }
 }

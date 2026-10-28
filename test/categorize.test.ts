@@ -1,18 +1,19 @@
 import { describe, expect, it } from 'vitest';
 import { categorizeWithoutLlm } from '../src/categorize';
+import type { NormalizedTransaction } from '../src/plaid';
 import { matchRule, SEED_RULES } from '../src/rules';
-import type { NormalizedTransaction } from '../src/teller';
 
 const transaction = (overrides: Partial<NormalizedTransaction>): NormalizedTransaction => ({
-  accountLabel: 'Chase Checking ••9999',
+  accountLabel: 'Chase Sapphire ••1234',
   accountType: 'credit',
+  bankCategory: null,
   date: '2026-10-20',
   description: '',
   id: crypto.randomUUID(),
   merchant: '',
+  pendingTransactionId: null,
   spend: 10,
   status: 'posted',
-  tellerCategory: null,
   ...overrides,
 });
 
@@ -20,8 +21,13 @@ describe('categorizeWithoutLlm', () => {
   it.each<{ name: string; input: Partial<NormalizedTransaction>; expected: ReturnType<typeof categorizeWithoutLlm> }>([
     {
       expected: { category: 'Uncategorized', review: true, source: 'venmo' },
-      input: { accountType: 'depository', description: 'VENMO CASHOUT PPD', spend: -40 },
+      input: { accountType: 'depository', description: 'VENMO CASHOUT PPD', merchant: 'Venmo', spend: -40 },
       name: 'sends Venmo to review',
+    },
+    {
+      expected: { category: 'Transfer', review: false, source: 'bank' },
+      input: { accountType: 'depository', bankCategory: 'LOAN_PAYMENTS_CREDIT_CARD_PAYMENT', description: 'BILT PAYMENT', spend: 1200 },
+      name: 'treats a credit card payment as a transfer',
     },
     {
       expected: { category: 'Eating Out', review: false, source: 'rule' },
@@ -34,8 +40,8 @@ describe('categorizeWithoutLlm', () => {
       name: 'matches a plain Uber ride',
     },
     {
-      expected: { category: 'Income', review: false, source: 'teller' },
-      input: { accountType: 'depository', description: 'ACME CORP PAYROLL', spend: -5254.71, tellerCategory: 'income' },
+      expected: { category: 'Income', review: false, source: 'bank' },
+      input: { accountType: 'depository', bankCategory: 'INCOME_WAGES', description: 'ACME CORP PAYROLL', spend: -5254.71 },
       name: 'treats a payroll deposit as income',
     },
     {

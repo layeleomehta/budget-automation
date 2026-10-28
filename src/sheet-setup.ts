@@ -13,7 +13,7 @@ const MONTH_VIEW_LIST_RANGE = `'${MONTH_VIEW_SHEET}'!D5`;
 
 const monthViewListFormula = () => {
   const t = TRANSACTIONS_SHEET;
-  return `=IFERROR(SORT(FILTER({${t}!A:A,${t}!B:B,${t}!C:C,${t}!E:E,${t}!F:F,${t}!G:G},ISNUMBER(${t}!A:A),${t}!A:A>=$B$2,${t}!A:A<EDATE($B$2,1)),1,TRUE),"No transactions")`;
+  return `=IFERROR(SORT(FILTER({${t}!A:A,${t}!B:B,${t}!C:C,${t}!E:E,${t}!F:F,${t}!G:G},ISNUMBER(${t}!A:A),${t}!A:A>=$B$2,${t}!A:A<EDATE($B$2,1)),1,FALSE),"No transactions")`;
 };
 
 const monthViewValues = () => {

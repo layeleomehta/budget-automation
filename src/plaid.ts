@@ -103,7 +103,7 @@ export const createPlaidClient = ({
       language: 'en',
       user: { client_user_id: 'budget-owner' },
       webhook,
-      ...(accessToken ? { access_token: accessToken } : { products: ['transactions'], transactions: { days_requested: 90 } }),
+      ...(accessToken ? { access_token: accessToken } : { products: ['transactions'], transactions: { days_requested: 730 } }),
     });
     return linkToken;
   };

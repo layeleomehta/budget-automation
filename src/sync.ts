@@ -1,6 +1,6 @@
 import { type Categorization, categorizeWithLlm, categorizeWithoutLlm, LLM_FAILURE } from './categorize';
 import { createGoogleTokenProvider } from './google-auth';
-import { findCorrections, isoDateToSerial, parseLedgerRows, planSync, toLedgerValues, TRANSACTIONS_SHEET } from './ledger';
+import { findCorrections, isoDateToSerial, LEDGER_HEADERS, parseLedgerRows, planSync, toLedgerValues, TRANSACTIONS_SHEET } from './ledger';
 import { createPlaidClient, type NormalizedTransaction, normalizeTransaction } from './plaid';
 import { parseRules, type Rule } from './rules';
 import { ensureSheetSetup, formatTransactionsSheet, RULES_SHEET } from './sheet-setup';
@@ -98,7 +98,20 @@ const sheetsClient = (env: Env) =>
     spreadsheetId: env.SPREADSHEET_ID,
   });
 
-export const formatSheet = (env: Env) => formatTransactionsSheet(sheetsClient(env));
+const newestFirst = (sheetId: number | undefined) => ({
+  sortRange: {
+    range: { endColumnIndex: LEDGER_HEADERS.length, sheetId, startColumnIndex: 0, startRowIndex: 1 },
+    sortSpecs: [{ dimensionIndex: 0, sortOrder: 'DESCENDING' }],
+  },
+});
+
+export const formatSheet = async (env: Env) => {
+  const sheets = sheetsClient(env);
+  const result = await formatTransactionsSheet(sheets);
+  const sheetId = (await sheets.getSheets()).find((sheet) => sheet.title === TRANSACTIONS_SHEET)?.sheetId;
+  await sheets.batchUpdate([newestFirst(sheetId)]);
+  return result;
+};
 
 export const resetLedger = async (env: Env) => {
   const sheets = sheetsClient(env);
@@ -167,15 +180,16 @@ export const runSync = async (env: Env) => {
     });
   }
 
-  if (plan.deletes.length > 0) {
+  if (inserts.length > 0 || plan.updates.length > 0 || plan.deletes.length > 0) {
     const sheetId = (await sheets.getSheets()).find((sheet) => sheet.title === TRANSACTIONS_SHEET)?.sheetId;
-    await sheets.batchUpdate(
-      plan.deletes
+    await sheets.batchUpdate([
+      ...plan.deletes
         .toSorted((a, b) => b - a)
         .map((rowNumber) => ({
           deleteDimension: { range: { dimension: 'ROWS', endIndex: rowNumber, sheetId, startIndex: rowNumber - 1 } },
         })),
-    );
+      newestFirst(sheetId),
+    ]);
   }
 
   await Promise.all(cursors.map(({ item, nextCursor }) => saveItem({ env, item: { ...item, cursor: nextCursor } })));

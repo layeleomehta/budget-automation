@@ -28,6 +28,10 @@ Amounts are spending-positive: purchases are positive, refunds/reimbursements/pa
 
 If a bank needs you to log in again, `GET /items?key=…` lists connected items; open `/connect?key=…&item=<itemId>` to repair it without using a new Plaid Item.
 
+## Transactions filter bar
+
+The dropdowns in the Transactions header row (Month, Category, Account, Review, Status) are applied by a small Apps Script. Install it once: in the sheet, open **Extensions → Apps Script**, replace the editor contents with [`apps-script/filters.gs`](apps-script/filters.gs), and save. Changing a dropdown then filters the rows immediately; "All" clears that filter.
+
 ## Development
 
 ```

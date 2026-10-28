@@ -258,6 +258,111 @@ const rowHighlight = ({ background, formula, sheetId, textColor }: { background?
   },
 });
 
+const columnLetter = (index: number) => String.fromCharCode('A'.charCodeAt(0) + index);
+
+export const TRANSACTIONS_FILTER_BAR = [
+  { column: 'M', label: 'Month', options: 'months' },
+  { column: 'F', label: 'Category', options: [ALL, ...ALL_CATEGORIES] },
+  { column: 'B', label: 'Account', options: 'accounts' },
+  { column: 'G', label: 'Review', options: REVIEW_OPTIONS },
+  { column: 'H', label: 'Status', options: STATUS_OPTIONS },
+] as const;
+const FILTER_BAR_START = 14;
+const FILTER_BAR_HELPERS = { accounts: 25, months: 24 };
+
+const setUpTransactionsFilterBar = async ({ sheetId, sheets }: { sheetId: number; sheets: SheetsClient }) => {
+  const t = TRANSACTIONS_SHEET;
+  const labels = TRANSACTIONS_FILTER_BAR.flatMap(({ label }) => [`${label}:`, ALL]);
+  await sheets.updateValues({
+    data: [{ range: `${t}!${columnLetter(FILTER_BAR_START)}1:${columnLetter(FILTER_BAR_START + labels.length - 1)}1`, values: [labels] }],
+    valueInputOption: 'RAW',
+  });
+  await sheets.updateValues({
+    data: [
+      {
+        range: `${t}!${columnLetter(FILTER_BAR_HELPERS.months)}1`,
+        values: [[`={"${ALL}";SORT(UNIQUE(FILTER(TEXT(A:A,"yyyy-mm"),ISNUMBER(A:A))),1,FALSE)}`]],
+      },
+      {
+        range: `${t}!${columnLetter(FILTER_BAR_HELPERS.accounts)}1`,
+        values: [[`={"${ALL}";SORT(UNIQUE(FILTER(B:B,ISNUMBER(A:A))))}`]],
+      },
+    ],
+    valueInputOption: 'USER_ENTERED',
+  });
+
+  const dropdownRule = (options: (typeof TRANSACTIONS_FILTER_BAR)[number]['options']) => {
+    if (typeof options !== 'string') {
+      return { condition: { type: 'ONE_OF_LIST', values: options.map((option) => ({ userEnteredValue: option })) }, showCustomUi: true, strict: true };
+    }
+    const helper = columnLetter(FILTER_BAR_HELPERS[options]);
+    return { condition: { type: 'ONE_OF_RANGE', values: [{ userEnteredValue: `=$${helper}$1:$${helper}` }] }, showCustomUi: true, strict: false };
+  };
+
+  await sheets.batchUpdate([
+    ...TRANSACTIONS_FILTER_BAR.flatMap(({ options }, index) => {
+      const labelColumn = FILTER_BAR_START + index * 2;
+      const valueColumn = labelColumn + 1;
+      return [
+        {
+          repeatCell: {
+            cell: { userEnteredFormat: { horizontalAlignment: 'RIGHT', textFormat: { bold: false, foregroundColor: hexColor('#6b7280') } } },
+            fields: 'userEnteredFormat(horizontalAlignment,textFormat.bold,textFormat.foregroundColor)',
+            range: { endColumnIndex: labelColumn + 1, endRowIndex: 1, sheetId, startColumnIndex: labelColumn, startRowIndex: 0 },
+          },
+        },
+        {
+          repeatCell: {
+            cell: {
+              userEnteredFormat: {
+                backgroundColor: hexColor('#dbeafe'),
+                numberFormat: { pattern: '@', type: 'TEXT' },
+                textFormat: { bold: false, foregroundColor: hexColor('#111827') },
+              },
+            },
+            fields: 'userEnteredFormat(backgroundColor,numberFormat,textFormat.bold,textFormat.foregroundColor)',
+            range: { endColumnIndex: valueColumn + 1, endRowIndex: 1, sheetId, startColumnIndex: valueColumn, startRowIndex: 0 },
+          },
+        },
+        {
+          setDataValidation: {
+            range: { endColumnIndex: valueColumn + 1, endRowIndex: 1, sheetId, startColumnIndex: valueColumn, startRowIndex: 0 },
+            rule: dropdownRule(options),
+          },
+        },
+        {
+          updateDimensionProperties: {
+            fields: 'pixelSize,hiddenByUser',
+            properties: { hiddenByUser: false, pixelSize: 70 },
+            range: { dimension: 'COLUMNS', endIndex: labelColumn + 1, sheetId, startIndex: labelColumn },
+          },
+        },
+        {
+          updateDimensionProperties: {
+            fields: 'pixelSize,hiddenByUser',
+            properties: { hiddenByUser: false, pixelSize: index === 2 ? 200 : 120 },
+            range: { dimension: 'COLUMNS', endIndex: valueColumn + 1, sheetId, startIndex: valueColumn },
+          },
+        },
+      ];
+    }),
+    {
+      updateDimensionProperties: {
+        fields: 'pixelSize',
+        properties: { pixelSize: 24 },
+        range: { dimension: 'COLUMNS', endIndex: FILTER_BAR_START, sheetId, startIndex: FILTER_BAR_START - 1 },
+      },
+    },
+    {
+      updateDimensionProperties: {
+        fields: 'hiddenByUser',
+        properties: { hiddenByUser: true },
+        range: { dimension: 'COLUMNS', endIndex: FILTER_BAR_HELPERS.accounts + 1, sheetId, startIndex: FILTER_BAR_HELPERS.months },
+      },
+    },
+  ]);
+};
+
 export const formatTransactionsSheet = async (sheets: SheetsClient) => {
   const details = await sheets.getSheetDetails(TRANSACTIONS_SHEET);
   if (!details) {
@@ -338,6 +443,8 @@ export const formatTransactionsSheet = async (sheets: SheetsClient) => {
     },
     { setBasicFilter: { filter: { range: { endColumnIndex: FILTERED_COLUMN_COUNT, sheetId, startColumnIndex: 0, startRowIndex: 0 } } } },
   ]);
+
+  await setUpTransactionsFilterBar({ sheetId, sheets });
 
   if (monthViewId !== undefined) {
     await setUpMonthViewControls({ sheetId: monthViewId, sheets });

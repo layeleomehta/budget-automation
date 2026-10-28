@@ -90,6 +90,132 @@ const columnProperties = ({ hidden, index, pixelSize, sheetId }: { hidden?: bool
   },
 });
 
+const styleMonthView = async ({ sheets, sheetId }: { sheetId: number; sheets: SheetsClient }) => {
+  const details = await sheets.getSheetDetails(MONTH_VIEW_SHEET);
+  const { firstRow, incomeRow, totalRow } = monthViewValues();
+  const savingsRow = incomeRow + 1;
+  const row = (index: number) => ({ endRowIndex: index, startRowIndex: index - 1 });
+  const header = hexColor('#e5e7eb');
+  const muted = hexColor('#6b7280');
+  const divider = { color: hexColor('#9ca3af'), style: 'SOLID' };
+  await sheets.batchUpdate([
+    ...(details?.bandedRangeIds ?? []).map((bandedRangeId) => ({ deleteBanding: { bandedRangeId } })),
+    {
+      repeatCell: {
+        cell: { userEnteredFormat: { textFormat: { fontSize: 10 }, verticalAlignment: 'MIDDLE' } },
+        fields: 'userEnteredFormat(textFormat.fontSize,verticalAlignment)',
+        range: { endColumnIndex: 13, sheetId, startColumnIndex: 0, startRowIndex: 0 },
+      },
+    },
+    {
+      repeatCell: {
+        cell: { userEnteredFormat: { textFormat: { bold: true, fontSize: 14 } } },
+        fields: 'userEnteredFormat(textFormat.bold,textFormat.fontSize)',
+        range: { endColumnIndex: 2, sheetId, startColumnIndex: 0, ...row(1) },
+      },
+    },
+    {
+      repeatCell: {
+        cell: { userEnteredFormat: { textFormat: { bold: false, fontSize: 9, foregroundColor: muted } } },
+        fields: 'userEnteredFormat(textFormat.bold,textFormat.fontSize,textFormat.foregroundColor)',
+        range: { endColumnIndex: 2, sheetId, startColumnIndex: 0, ...row(2) },
+      },
+    },
+    {
+      addBanding: {
+        bandedRange: {
+          range: { endColumnIndex: 3, endRowIndex: totalRow - 1, sheetId, startColumnIndex: 0, startRowIndex: 3 },
+          rowProperties: { firstBandColor: hexColor('#ffffff'), headerColor: header, secondBandColor: hexColor('#f8fafc') },
+        },
+      },
+    },
+    {
+      addBanding: {
+        bandedRange: {
+          range: { endColumnIndex: 10, sheetId, startColumnIndex: 3, startRowIndex: 3 },
+          rowProperties: { firstBandColor: hexColor('#ffffff'), headerColor: header, secondBandColor: hexColor('#f8fafc') },
+        },
+      },
+    },
+    {
+      repeatCell: {
+        cell: { userEnteredFormat: { textFormat: { bold: true, foregroundColor: hexColor('#111827') } } },
+        fields: 'userEnteredFormat(textFormat.bold,textFormat.foregroundColor)',
+        range: { endColumnIndex: 10, sheetId, startColumnIndex: 0, ...row(4) },
+      },
+    },
+    {
+      repeatCell: {
+        cell: { userEnteredFormat: { textFormat: { bold: true } } },
+        fields: 'userEnteredFormat.textFormat.bold',
+        range: { endColumnIndex: 3, endRowIndex: savingsRow, sheetId, startColumnIndex: 0, startRowIndex: totalRow - 1 },
+      },
+    },
+    {
+      updateBorders: {
+        range: { endColumnIndex: 3, sheetId, startColumnIndex: 0, ...row(totalRow) },
+        top: divider,
+      },
+    },
+    {
+      repeatCell: {
+        cell: { userEnteredFormat: { backgroundColor: hexColor('#dcfce7'), textFormat: { bold: true, foregroundColor: hexColor('#166534') } } },
+        fields: 'userEnteredFormat(backgroundColor,textFormat.bold,textFormat.foregroundColor)',
+        range: { endColumnIndex: 3, sheetId, startColumnIndex: 0, ...row(savingsRow) },
+      },
+    },
+    {
+      repeatCell: {
+        cell: { userEnteredFormat: { horizontalAlignment: 'RIGHT' } },
+        fields: 'userEnteredFormat.horizontalAlignment',
+        range: { endColumnIndex: 3, endRowIndex: savingsRow, sheetId, startColumnIndex: 1, startRowIndex: 3 },
+      },
+    },
+    {
+      repeatCell: {
+        cell: { userEnteredFormat: { textFormat: { foregroundColor: muted } } },
+        fields: 'userEnteredFormat.textFormat.foregroundColor',
+        range: { endColumnIndex: 3, endRowIndex: totalRow, sheetId, startColumnIndex: 2, startRowIndex: firstRow - 1 },
+      },
+    },
+    {
+      repeatCell: {
+        cell: { userEnteredFormat: { textFormat: { bold: true, fontSize: 11 } } },
+        fields: 'userEnteredFormat(textFormat.bold,textFormat.fontSize)',
+        range: { endColumnIndex: FILTER_LABEL_COLUMN + 1, endRowIndex: 1, sheetId, startColumnIndex: FILTER_LABEL_COLUMN, startRowIndex: 0 },
+      },
+    },
+    {
+      repeatCell: {
+        cell: { userEnteredFormat: { horizontalAlignment: 'RIGHT', textFormat: { bold: false, foregroundColor: muted } } },
+        fields: 'userEnteredFormat(horizontalAlignment,textFormat.bold,textFormat.foregroundColor)',
+        range: { endColumnIndex: FILTER_LABEL_COLUMN + 1, endRowIndex: FILTERS.length + 1, sheetId, startColumnIndex: FILTER_LABEL_COLUMN, startRowIndex: 1 },
+      },
+    },
+    {
+      updateBorders: {
+        bottom: FILTER_BAR_BORDER,
+        innerHorizontal: { color: hexColor('#ffffff'), style: 'SOLID_THICK' },
+        left: FILTER_BAR_BORDER,
+        range: { endColumnIndex: FILTER_VALUE_COLUMN + 1, endRowIndex: FILTERS.length + 1, sheetId, startColumnIndex: FILTER_VALUE_COLUMN, startRowIndex: 1 },
+        right: FILTER_BAR_BORDER,
+        top: FILTER_BAR_BORDER,
+      },
+    },
+    columnProperties({ index: 0, pixelSize: 170, sheetId }),
+    columnProperties({ index: 1, pixelSize: 110, sheetId }),
+    columnProperties({ index: 2, pixelSize: 90, sheetId }),
+    columnProperties({ index: 10, pixelSize: 24, sheetId }),
+    {
+      updateDimensionProperties: {
+        fields: 'pixelSize',
+        properties: { pixelSize: 26 },
+        range: { dimension: 'ROWS', endIndex: savingsRow, sheetId, startIndex: 3 },
+      },
+    },
+  ]);
+};
+
 export const setUpMonthViewControls = async ({ sheetId, sheets }: { sheetId: number; sheets: SheetsClient }) => {
   const currentMonth = new Date().toISOString().slice(0, 7);
   await sheets.batchUpdate([
@@ -200,6 +326,7 @@ export const setUpMonthViewControls = async ({ sheetId, sheets }: { sheetId: num
       },
     },
   ]);
+  await styleMonthView({ sheetId, sheets });
 };
 
 const monthViewValues = () => {

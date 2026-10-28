@@ -1,3 +1,4 @@
+import type { Category } from './categories';
 import { ACCOUNTS_SHEET, displayAccount, parseNicknames, planRelabels } from './accounts';
 import { type Categorization, categorizeWithLlm, categorizeWithoutLlm, LLM_FAILURE } from './categorize';
 import { createGoogleTokenProvider } from './google-auth';
@@ -151,6 +152,31 @@ export const monthBreakdown = async ({ env, month }: { env: Env; month: string }
     })),
     totals,
   };
+};
+
+export const setCategory = async ({
+  category,
+  date,
+  env,
+  match,
+}: {
+  category: Category;
+  date: string;
+  env: Env;
+  match: string;
+}) => {
+  const sheets = sheetsClient(env);
+  const ledger = parseLedgerRows(await sheets.getValues(`${TRANSACTIONS_SHEET}!A2:L`));
+  const needle = match.toUpperCase();
+  const rows = ledger.filter((row) => row.date === date && row.description.toUpperCase().includes(needle));
+  await sheets.updateValues({
+    data: rows.map((row) => ({
+      range: `${TRANSACTIONS_SHEET}!F${row.rowNumber}:J${row.rowNumber}`,
+      values: [[category, false, null, 'manual', category]],
+    })),
+    valueInputOption: 'RAW',
+  });
+  return rows.map(({ account, amount, description, rowNumber }) => ({ account, amount, category, description, rowNumber }));
 };
 
 export const redateTransactions = async ({

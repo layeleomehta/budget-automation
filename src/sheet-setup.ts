@@ -70,7 +70,9 @@ const numberFormat = ({
   },
 });
 
-const TRANSACTIONS_COLUMN_WIDTHS = [95, 230, 180, 280, 100, 130, 70, 80];
+const FRIENDLY_DATE = 'mmm d, yyyy';
+const CURRENCY = '$#,##0.00;-$#,##0.00';
+const TRANSACTIONS_COLUMN_WIDTHS = [105, 230, 180, 280, 100, 130, 70, 80];
 const HIDDEN_COLUMNS = { end: 11, start: 8 };
 const VISIBLE_COLUMN_COUNT = TRANSACTIONS_COLUMN_WIDTHS.length;
 
@@ -102,8 +104,14 @@ export const formatTransactionsSheet = async (sheets: SheetsClient) => {
     return { formatted: false };
   }
   const { bandedRangeIds, conditionalFormatCount, sheetId } = details;
+  const monthViewId = (await sheets.getSheets()).find((sheet) => sheet.title === MONTH_VIEW_SHEET)?.sheetId;
 
   await sheets.batchUpdate([
+    numberFormat({ endColumn: 1, pattern: FRIENDLY_DATE, sheetId, startColumn: 0, startRow: 1, type: 'DATE' }),
+    numberFormat({ endColumn: 5, pattern: CURRENCY, sheetId, startColumn: 4, startRow: 1, type: 'CURRENCY' }),
+    ...(monthViewId === undefined
+      ? []
+      : [numberFormat({ endColumn: 4, pattern: FRIENDLY_DATE, sheetId: monthViewId, startColumn: 3, startRow: 4, type: 'DATE' })]),
     ...bandedRangeIds.map((bandedRangeId) => ({ deleteBanding: { bandedRangeId } })),
     ...Array.from({ length: conditionalFormatCount }, (_, offset) => ({
       deleteConditionalFormatRule: { index: conditionalFormatCount - 1 - offset, sheetId },
@@ -180,7 +188,7 @@ export const ensureSheetSetup = async (sheets: SheetsClient) => {
   if (transactionsId !== undefined) {
     await sheets.updateValues({ data: [{ range: `${TRANSACTIONS_SHEET}!A1:K1`, values: [[...LEDGER_HEADERS]] }], valueInputOption: 'RAW' });
     await sheets.batchUpdate([
-      numberFormat({ endColumn: 1, pattern: 'yyyy-mm-dd', sheetId: transactionsId, startColumn: 0, startRow: 1, type: 'DATE' }),
+      numberFormat({ endColumn: 1, pattern: FRIENDLY_DATE, sheetId: transactionsId, startColumn: 0, startRow: 1, type: 'DATE' }),
       numberFormat({ endColumn: 5, pattern: '$#,##0.00;-$#,##0.00', sheetId: transactionsId, startColumn: 4, startRow: 1, type: 'CURRENCY' }),
       {
         setDataValidation: {
@@ -220,7 +228,7 @@ export const ensureSheetSetup = async (sheets: SheetsClient) => {
       numberFormat({ endColumn: 2, endRow: 2, pattern: 'yyyy-mm-dd', sheetId: monthViewId, startColumn: 1, startRow: 1, type: 'DATE' }),
       numberFormat({ endColumn: 2, endRow: incomeRow, pattern: '$#,##0.00', sheetId: monthViewId, startColumn: 1, startRow: firstRow - 1, type: 'CURRENCY' }),
       numberFormat({ endColumn: 2, endRow: incomeRow + 1, pattern: '0.0%', sheetId: monthViewId, startColumn: 1, startRow: incomeRow, type: 'PERCENT' }),
-      numberFormat({ endColumn: 4, pattern: 'yyyy-mm-dd', sheetId: monthViewId, startColumn: 3, startRow: 4, type: 'DATE' }),
+      numberFormat({ endColumn: 4, pattern: FRIENDLY_DATE, sheetId: monthViewId, startColumn: 3, startRow: 4, type: 'DATE' }),
       numberFormat({ endColumn: 7, pattern: '$#,##0.00;-$#,##0.00', sheetId: monthViewId, startColumn: 6, startRow: 4, type: 'CURRENCY' }),
     ]);
   }

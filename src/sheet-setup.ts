@@ -161,6 +161,13 @@ const styleMonthView = async ({ sheets, sheetId }: { sheetId: number; sheets: Sh
       },
     },
     {
+      repeatCell: {
+        cell: { userEnteredFormat: { textFormat: { bold: true, fontSize: 12, foregroundColor: hexColor('#111827') }, verticalAlignment: 'BOTTOM' } },
+        fields: 'userEnteredFormat(textFormat.bold,textFormat.fontSize,textFormat.foregroundColor,verticalAlignment)',
+        range: { endColumnIndex: 1, sheetId, startColumnIndex: 0, ...row(3) },
+      },
+    },
+    {
       updateBorders: {
         range: { endColumnIndex: 3, sheetId, startColumnIndex: 0, ...row(totalRow) },
         top: divider,
@@ -264,6 +271,7 @@ export const setUpMonthViewControls = async ({ sheetId, sheets }: { sheetId: num
   await sheets.updateValues({
     data: [
       { range: `'${MONTH_VIEW_SHEET}'!A1:B2`, values: [['Month', `=${MONTH}`], ['Start', MONTH_START_FORMULA]] },
+      { range: `'${MONTH_VIEW_SHEET}'!A3`, values: [['Summary']] },
       { range: `'${MONTH_VIEW_SHEET}'!E3`, values: [['Transactions']] },
       { range: `'${MONTH_VIEW_SHEET}'!E4:K4`, values: [MONTH_VIEW_LIST_HEADERS] },
       { range: MONTH_VIEW_LIST_RANGE, values: [[monthViewListFormula()]] },

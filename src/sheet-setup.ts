@@ -516,7 +516,8 @@ export const formatTransactionsSheet = async (sheets: SheetsClient) => {
       },
     },
     rowHighlight({ formula: '=$E2<0', sheetId, textColor: '#15803d' }),
-    rowHighlight({ formula: '=$F2="Transfer"', sheetId, textColor: '#9ca3af' }),
+    rowHighlight({ background: '#f3f4f6', formula: '=$F2="Transfer"', sheetId, textColor: '#6b7280' }),
+    rowHighlight({ background: '#dcfce7', formula: '=$F2="Income"', sheetId, textColor: '#166534' }),
     rowHighlight({ background: '#fef3c7', formula: '=$G2=TRUE', sheetId }),
     {
       updateDimensionProperties: {

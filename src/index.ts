@@ -1,5 +1,5 @@
 import { renderLinkPage } from './link-page';
-import { type Env, getItem, listItems, plaidClient, runSync, saveItem } from './sync';
+import { type Env, getItem, listItems, plaidClient, resetLedger, runSync, saveItem } from './sync';
 
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body, null, 2), { headers: { 'Content-Type': 'application/json' }, status });
@@ -68,6 +68,10 @@ export default {
 
     if (route === 'POST /sync') {
       return json(await runSync(env));
+    }
+
+    if (route === 'POST /reset') {
+      return json(await resetLedger(env));
     }
 
     return new Response('Not found', { status: 404 });

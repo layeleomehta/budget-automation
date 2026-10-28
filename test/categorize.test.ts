@@ -30,6 +30,41 @@ describe('categorizeWithoutLlm', () => {
       name: 'treats a credit card payment as a transfer',
     },
     {
+      expected: { category: 'Transfer', review: false, source: 'bank' },
+      input: { bankCategory: 'RENT_AND_UTILITIES_RENT', description: 'Bilt Housing Payment', spend: 2400 },
+      name: 'treats the Bilt card rent charge as a pass-through',
+    },
+    {
+      expected: { category: 'Transfer', review: false, source: 'bank' },
+      input: { bankCategory: 'INCOME_RENTAL', description: 'Payment - Bilt Housing', spend: -2400 },
+      name: 'treats the Bilt card rent credit as a pass-through',
+    },
+    {
+      expected: { category: 'Rent', review: false, source: 'bank' },
+      input: { accountType: 'depository', bankCategory: 'RENT_AND_UTILITIES_RENT', description: 'BILT CARD HOUSING PPD ID: 1844372402', spend: 2400 },
+      name: 'counts the checking rent debit as rent',
+    },
+    {
+      expected: { category: 'Transfer', review: false, source: 'bank' },
+      input: { bankCategory: 'INCOME_SALARY', description: 'AUTOMATIC PAYMENT - THANK', spend: -1438.26 },
+      name: 'treats a mislabelled card payment credit as a transfer',
+    },
+    {
+      expected: { category: 'Transfer', review: false, source: 'bank' },
+      input: { bankCategory: 'LOAN_DISBURSEMENTS_OTHER_DISBURSEMENT', description: 'Online Payment', spend: -73.98 },
+      name: 'treats a card payment credit as a transfer',
+    },
+    {
+      expected: { category: 'Transfer', review: false, source: 'bank' },
+      input: { accountType: 'depository', bankCategory: 'TRANSFER_OUT_INVESTMENT_AND_RETIREMENT_FUNDS', description: 'Wealthfront EDI PYMNTS', spend: 5500 },
+      name: 'treats an investment transfer as a transfer',
+    },
+    {
+      expected: undefined,
+      input: { bankCategory: 'TRAVEL_LODGING', description: 'ANNUAL HOTEL CREDIT', spend: -100 },
+      name: 'leaves ordinary card refunds for the LLM',
+    },
+    {
       expected: { category: 'Eating Out', review: false, source: 'rule' },
       input: { description: 'UBER EATS PENDING' },
       name: 'prefers the longer matching rule',

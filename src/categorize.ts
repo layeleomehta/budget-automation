@@ -11,6 +11,17 @@ export type Categorization = { category: Category; review: boolean; source: Cate
 
 const CREDIT_CARD_PAYMENT = 'LOAN_PAYMENTS_CREDIT_CARD_PAYMENT';
 
+const isCardPaymentOrPassThrough = (transaction: NormalizedTransaction) => {
+  if (transaction.bankCategory === CREDIT_CARD_PAYMENT) {
+    return true;
+  }
+  if (transaction.accountType !== 'credit') {
+    return false;
+  }
+  const text = `${transaction.merchant} ${transaction.description}`.toUpperCase();
+  return text.includes('BILT HOUSING') || (transaction.spend < 0 && /^(LOAN_|INCOME_)/.test(transaction.bankCategory ?? ''));
+};
+
 export const categorizeWithoutLlm = ({
   rules,
   transaction,
@@ -21,12 +32,15 @@ export const categorizeWithoutLlm = ({
   if (isVenmo(transaction)) {
     return { category: UNCATEGORIZED, review: true, source: 'venmo' };
   }
-  if (transaction.bankCategory === CREDIT_CARD_PAYMENT) {
-    return { category: TRANSFER, review: false, source: 'bank' };
-  }
   const rule = matchRule({ rules, transaction });
   if (rule) {
     return { category: rule.category, review: false, source: 'rule' };
+  }
+  if (isCardPaymentOrPassThrough(transaction) || transaction.bankCategory?.startsWith('TRANSFER_OUT_INVESTMENT')) {
+    return { category: TRANSFER, review: false, source: 'bank' };
+  }
+  if (transaction.accountType === 'depository' && transaction.bankCategory === 'RENT_AND_UTILITIES_RENT') {
+    return { category: 'Rent', review: false, source: 'bank' };
   }
   if (
     transaction.accountType === 'depository' &&

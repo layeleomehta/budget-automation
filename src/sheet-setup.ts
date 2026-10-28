@@ -97,12 +97,6 @@ export const ensureSheetSetup = async (sheets: SheetsClient) => {
         },
       },
       {
-        setDataValidation: {
-          range: { endColumnIndex: 7, sheetId: transactionsId, startColumnIndex: 6, startRowIndex: 1 },
-          rule: { condition: { type: 'BOOLEAN' } },
-        },
-      },
-      {
         addFilterView: {
           filter: {
             criteria: { 6: { condition: { type: 'CUSTOM_FORMULA', values: [{ userEnteredValue: '=$G2=TRUE' }] } } },

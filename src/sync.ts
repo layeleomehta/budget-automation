@@ -92,11 +92,28 @@ const categorizeAll = async ({
   return results;
 };
 
-export const runSync = async (env: Env) => {
-  const sheets = createSheetsClient({
+const sheetsClient = (env: Env) =>
+  createSheetsClient({
     getAccessToken: createGoogleTokenProvider(env.GOOGLE_SERVICE_ACCOUNT_JSON),
     spreadsheetId: env.SPREADSHEET_ID,
   });
+
+export const resetLedger = async (env: Env) => {
+  const sheets = sheetsClient(env);
+  const sheetId = (await sheets.getSheets()).find((sheet) => sheet.title === TRANSACTIONS_SHEET)?.sheetId;
+  await sheets.clearValues(`${TRANSACTIONS_SHEET}!A2:K`);
+  if (sheetId !== undefined) {
+    await sheets.batchUpdate([
+      { setDataValidation: { range: { endColumnIndex: 7, sheetId, startColumnIndex: 6, startRowIndex: 1 } } },
+    ]);
+  }
+  const items = await listItems(env);
+  await Promise.all(items.map(({ cursor: _cursor, ...item }) => saveItem({ env, item })));
+  return { clearedCursors: items.length };
+};
+
+export const runSync = async (env: Env) => {
+  const sheets = sheetsClient(env);
   await ensureSheetSetup(sheets);
 
   const [ledgerValues, ruleValues] = await Promise.all([

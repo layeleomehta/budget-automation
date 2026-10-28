@@ -43,6 +43,9 @@ export const createSheetsClient = ({
         method: 'POST',
       }),
 
+    clearValues: (range: string) =>
+      request(`/values/${encodeURIComponent(range)}:clear`, { body: '{}', method: 'POST' }),
+
     getSheets: async () => {
       const { sheets } = await request<{ sheets: { properties: { sheetId: number; title: string } }[] }>(
         '?fields=sheets.properties(sheetId,title)',

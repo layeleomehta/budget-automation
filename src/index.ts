@@ -1,7 +1,7 @@
 import { renderLinkPage } from './link-page';
-import { isCategory } from './categories';
+import { type Category, isCategory } from './categories';
 import { parseRules } from './rules';
-import { addRules, type Env, formatSheet, listReview, setCategory, getItem, listItems, monthBreakdown, plaidClient, redateTransactions, resetLedger, runSync, saveItem } from './sync';
+import { addManualTransaction, addRules, type Env, formatSheet, listReview, setCategory, getItem, listItems, monthBreakdown, plaidClient, redateTransactions, resetLedger, runSync, saveItem } from './sync';
 
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body, null, 2), { headers: { 'Content-Type': 'application/json' }, status });
@@ -70,6 +70,30 @@ export default {
 
     if (route === 'POST /sync') {
       return json(await runSync(env));
+    }
+
+    if (route === 'POST /manual-transaction') {
+      const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
+      const valid =
+        typeof body?.date === 'string' &&
+        /^\d{4}-\d{2}-\d{2}$/.test(body.date) &&
+        typeof body.amount === 'number' &&
+        typeof body.description === 'string' &&
+        typeof body.bankAccount === 'string' &&
+        isCategory(body.category);
+      if (!valid) {
+        return json({ error: 'Expected date, amount, description, bankAccount and category' }, 400);
+      }
+      return json(
+        await addManualTransaction({
+          amount: body.amount as number,
+          bankAccount: body.bankAccount as string,
+          category: body.category as Category,
+          date: body.date as string,
+          description: body.description as string,
+          env,
+        }),
+      );
     }
 
     if (route === 'GET /review') {

@@ -163,6 +163,35 @@ export const monthBreakdown = async ({ env, month }: { env: Env; month: string }
   };
 };
 
+export const addManualTransaction = async ({
+  amount,
+  bankAccount,
+  category,
+  date,
+  description,
+  env,
+}: {
+  amount: number;
+  bankAccount: string;
+  category: Category;
+  date: string;
+  description: string;
+  env: Env;
+}) => {
+  const sheets = sheetsClient(env);
+  const { nicknames } = parseNicknames(await sheets.getValues(`${ACCOUNTS_SHEET}!A2:B`));
+  const id = `manual-${crypto.randomUUID()}`;
+  const account = displayAccount({ bankAccount, nicknames });
+  await sheets.appendValues({
+    range: `${TRANSACTIONS_SHEET}!A:L`,
+    valueInputOption: 'RAW',
+    values: [[isoDateToSerial(date), account, '', description, amount, category, false, 'posted', 'manual', category, id, bankAccount]],
+  });
+  const sheetId = (await sheets.getSheets()).find((sheet) => sheet.title === TRANSACTIONS_SHEET)?.sheetId;
+  await sheets.batchUpdate([newestFirst(sheetId)]);
+  return { account, amount, category, date, description, id };
+};
+
 export const listReview = async (env: Env) => {
   const ledger = parseLedgerRows(await sheetsClient(env).getValues(`${TRANSACTIONS_SHEET}!A2:L`));
   return ledger

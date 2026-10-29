@@ -1,3 +1,4 @@
+import { type AccountInfo, accountsMatching } from './accounts';
 import { isoDateToSerial, type LedgerRow } from './ledger';
 
 export const BENEFITS_SHEET = 'Benefits';
@@ -47,8 +48,6 @@ export type BenefitResult = {
   used: number;
   value: number;
 };
-
-export type AccountInfo = { bankAccount: string; nickname: string; productName: string };
 
 const SAPPHIRE_PREFERRED = { cardName: 'Chase Sapphire Preferred', cardPattern: /SAPPHIRE PREFERRED/i };
 
@@ -118,12 +117,9 @@ export const CARD_PERKS: CardPerk[] = [
   { ...BILT_BLUE, howToUse: 'Use it abroad.', perk: 'No foreign transaction fees' },
 ];
 
-const matchingAccounts = ({ accounts, cardPattern }: { accounts: AccountInfo[]; cardPattern: RegExp }) =>
-  accounts.filter((account) => cardPattern.test(`${account.bankAccount} ${account.nickname} ${account.productName}`));
-
 export const linkedPerks = ({ accounts, perks }: { accounts: AccountInfo[]; perks: CardPerk[] }) =>
   perks.flatMap((perk) => {
-    const cardAccounts = matchingAccounts({ accounts, cardPattern: perk.cardPattern });
+    const cardAccounts = accountsMatching({ accounts, pattern: perk.cardPattern });
     return cardAccounts.length === 0
       ? []
       : [[cardAccounts.find((account) => account.nickname)?.nickname ?? perk.cardName, perk.perk, perk.howToUse]];
@@ -196,7 +192,7 @@ export const computeBenefits = ({
   today: string;
 }): BenefitResult[] => {
   const results = benefits.flatMap((benefit) => {
-    const cardAccounts = matchingAccounts({ accounts, cardPattern: benefit.cardPattern });
+    const cardAccounts = accountsMatching({ accounts, pattern: benefit.cardPattern });
     const cardBankAccounts = new Set(cardAccounts.map((account) => account.bankAccount));
     const cardRows = ledger.filter((row) => cardBankAccounts.has(row.bankAccount) || benefit.cardPattern.test(row.account));
     if (cardAccounts.length === 0 && cardRows.length === 0) {

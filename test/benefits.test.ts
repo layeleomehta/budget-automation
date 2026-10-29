@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { type AccountInfo, BENEFITS, benefitKey, CARD_PERKS, computeBenefits, linkedPerks, parseDoneBenefits } from '../src/benefits';
+import type { AccountInfo } from '../src/accounts';
+import { BENEFITS, benefitKey, CARD_PERKS, computeBenefits, linkedPerks, parseDoneBenefits } from '../src/benefits';
 import type { LedgerRow } from '../src/ledger';
 
 const SAPPHIRE: AccountInfo = { bankAccount: 'Chase CREDIT CARD ••9944', nickname: 'Sapphire', productName: 'Chase Sapphire Preferred' };

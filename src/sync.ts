@@ -1,10 +1,11 @@
 import type { Category } from './categories';
-import { ACCOUNTS_SHEET, displayAccount, parseAccountInfo, parseNicknames, planRelabels } from './accounts';
+import { ACCOUNTS_SHEET, type AccountInfo, displayAccount, parseAccountInfo, parseNicknames, planRelabels } from './accounts';
 import { BENEFITS, BENEFITS_SHEET, CARD_PERKS, computeBenefits, linkedPerks, parseDoneBenefits, toBenefitValues } from './benefits';
 import { type Categorization, categorizeWithLlm, categorizeWithoutLlm, LLM_FAILURE } from './categorize';
 import { createGoogleTokenProvider } from './google-auth';
-import { findCorrections, isoDateToSerial, reapplyRules, LEDGER_HEADERS, parseLedgerRows, planSync, toLedgerValues, TRANSACTIONS_SHEET } from './ledger';
+import { findCorrections, isoDateToSerial, type LedgerRow, reapplyRules, LEDGER_HEADERS, parseLedgerRows, planSync, toLedgerValues, TRANSACTIONS_SHEET } from './ledger';
 import { accountLabel, createPlaidClient, type NormalizedTransaction, normalizeTransaction } from './plaid';
+import { CARD_EARNINGS, computeMonthlyPoints, POINTS_SHEET, toPointsValues } from './points';
 import { parseRules, type Rule } from './rules';
 import {
   applyFilterOptions,
@@ -12,6 +13,7 @@ import {
   BENEFITS_PERKS_TITLE,
   ensureSheetSetup,
   formatBenefitsSheet,
+  formatPointsSheet,
   formatTransactionsSheet,
   layOutBenefitPerks,
   resetBenefitsBody,
@@ -132,18 +134,27 @@ const filterOptions = (entries: { account: string; date: string }[]) => ({
 
 const pacificToday = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Los_Angeles' }).format(new Date());
 
-const updateBenefits = async (sheets: SheetsClient) => {
+const updatePoints = async ({ accounts, ledger, sheets }: { accounts: AccountInfo[]; ledger: LedgerRow[]; sheets: SheetsClient }) => {
+  const values = toPointsValues(computeMonthlyPoints({ accounts, cards: CARD_EARNINGS, ledger }));
+  await sheets.clearValues(`${POINTS_SHEET}!A1:Z`);
+  await sheets.updateValues({ data: [{ range: `${POINTS_SHEET}!A1`, values }], valueInputOption: 'RAW' });
+  await formatPointsSheet({ columnCount: values[0]?.length ?? 0, sheets });
+};
+
+const updateCardTabs = async (sheets: SheetsClient) => {
   const [ledgerValues, accountValues, benefitValues] = await Promise.all([
     sheets.getValues(`${TRANSACTIONS_SHEET}!A2:L`),
     sheets.getValues(`${ACCOUNTS_SHEET}!A2:C`),
     sheets.getValues(`${BENEFITS_SHEET}!A2:K`),
   ]);
   const accounts = parseAccountInfo(accountValues);
+  const ledger = parseLedgerRows(ledgerValues);
+  await updatePoints({ accounts, ledger, sheets });
   const results = computeBenefits({
     accounts,
     benefits: BENEFITS,
     done: parseDoneBenefits(benefitValues),
-    ledger: parseLedgerRows(ledgerValues),
+    ledger,
     today: pacificToday(),
   });
   const perks = linkedPerks({ accounts, perks: CARD_PERKS });
@@ -446,8 +457,8 @@ export const runSync = async (env: Env) => {
 
   await Promise.all(cursors.map(({ item, nextCursor }) => saveItem({ env, item: { ...item, cursor: nextCursor } })));
 
-  const benefits = await updateBenefits(sheets).catch((error: unknown) => {
-    const message = `Benefits update failed: ${String(error)}`;
+  const benefits = await updateCardTabs(sheets).catch((error: unknown) => {
+    const message = `Benefits/points update failed: ${String(error)}`;
     console.error(message);
     errors.push(message);
     return [];

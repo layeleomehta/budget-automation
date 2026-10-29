@@ -1,5 +1,6 @@
 import { ACCOUNTS_HEADERS, ACCOUNTS_SHEET } from './accounts';
 import { BENEFITS_HEADERS, BENEFITS_SHEET } from './benefits';
+import { POINTS_SHEET } from './points';
 import { ALL_CATEGORIES, BUDGET_CATEGORIES, INCOME, UNCATEGORIZED } from './categories';
 import { LEDGER_HEADERS, TRANSACTIONS_SHEET } from './ledger';
 import { SEED_RULES } from './rules';
@@ -903,9 +904,69 @@ export const resetBenefitsBody = async (sheets: SheetsClient) => {
   await sheets.clearValues(`${BENEFITS_SHEET}!A2:K`);
 };
 
+export const formatPointsSheet = async ({ columnCount, sheets }: { columnCount: number; sheets: SheetsClient }) => {
+  const details = await sheets.getSheetDetails(POINTS_SHEET);
+  if (!details) {
+    return;
+  }
+  const { bandedRangeIds, sheetId } = details;
+  const valueColumn = columnCount - 1;
+  await sheets.batchUpdate([
+    ...bandedRangeIds.map((bandedRangeId) => ({ deleteBanding: { bandedRangeId } })),
+    {
+      repeatCell: {
+        cell: { userEnteredFormat: { numberFormat: { pattern: '#,##0', type: 'NUMBER' } } },
+        fields: 'userEnteredFormat.numberFormat',
+        range: { endColumnIndex: valueColumn, sheetId, startColumnIndex: 1, startRowIndex: 1 },
+      },
+    },
+    numberFormat({ endColumn: valueColumn + 1, pattern: CURRENCY, sheetId, startColumn: valueColumn, startRow: 1, type: 'CURRENCY' }),
+    {
+      repeatCell: {
+        cell: { userEnteredFormat: { textFormat: { bold: true }, verticalAlignment: 'MIDDLE', wrapStrategy: 'WRAP' } },
+        fields: 'userEnteredFormat(textFormat.bold,verticalAlignment,wrapStrategy)',
+        range: { endRowIndex: 1, sheetId, startRowIndex: 0 },
+      },
+    },
+    {
+      repeatCell: {
+        cell: { userEnteredFormat: { textFormat: { bold: true } } },
+        fields: 'userEnteredFormat.textFormat.bold',
+        range: { endColumnIndex: columnCount, sheetId, startColumnIndex: valueColumn - 1, startRowIndex: 1 },
+      },
+    },
+    {
+      updateDimensionProperties: {
+        fields: 'pixelSize',
+        properties: { pixelSize: 90 },
+        range: { dimension: 'COLUMNS', endIndex: 1, sheetId, startIndex: 0 },
+      },
+    },
+    {
+      updateDimensionProperties: {
+        fields: 'pixelSize',
+        properties: { pixelSize: 150 },
+        range: { dimension: 'COLUMNS', endIndex: columnCount, sheetId, startIndex: 1 },
+      },
+    },
+    {
+      addBanding: {
+        bandedRange: {
+          range: { endColumnIndex: columnCount, sheetId, startColumnIndex: 0, startRowIndex: 0 },
+          rowProperties: {
+            firstBandColor: hexColor('#ffffff'),
+            headerColor: hexColor('#e5e7eb'),
+            secondBandColor: hexColor('#f8fafc'),
+          },
+        },
+      },
+    },
+  ]);
+};
+
 export const ensureSheetSetup = async (sheets: SheetsClient) => {
   const existing = new Set((await sheets.getSheets()).map((sheet) => sheet.title));
-  const missing = [TRANSACTIONS_SHEET, RULES_SHEET, MONTH_VIEW_SHEET, ACCOUNTS_SHEET, BENEFITS_SHEET].filter((title) => !existing.has(title));
+  const missing = [TRANSACTIONS_SHEET, RULES_SHEET, MONTH_VIEW_SHEET, ACCOUNTS_SHEET, BENEFITS_SHEET, POINTS_SHEET].filter((title) => !existing.has(title));
   if (existing.has(TRANSACTIONS_SHEET)) {
     await sheets.updateValues({
       data: [{ range: `${TRANSACTIONS_SHEET}!A1:L1`, values: [[...LEDGER_HEADERS]] }],

@@ -19,7 +19,12 @@ export const parseNicknames = (rows: unknown[][]) => {
   return { known, nicknames };
 };
 
-export const parseAccountInfo = (rows: unknown[][]) =>
+export type AccountInfo = { bankAccount: string; nickname: string; productName: string };
+
+export const accountsMatching = ({ accounts, pattern }: { accounts: AccountInfo[]; pattern: RegExp }) =>
+  accounts.filter((account) => pattern.test(`${account.bankAccount} ${account.nickname} ${account.productName}`));
+
+export const parseAccountInfo = (rows: unknown[][]): AccountInfo[] =>
   rows.flatMap(([bankAccount, nickname, productName]) =>
     typeof bankAccount === 'string' && bankAccount.trim()
       ? [{ bankAccount, nickname: String(nickname ?? '').trim(), productName: String(productName ?? '').trim() }]

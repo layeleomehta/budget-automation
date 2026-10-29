@@ -92,6 +92,12 @@ const columnProperties = ({ hidden, index, pixelSize, sheetId }: { hidden?: bool
   },
 });
 
+const MONEY_FLOW_COLORS = [
+  { background: '#f3f4f6', formula: '=$I5="Transfer"', text: '#6b7280' },
+  { background: '#dcfce7', formula: '=AND(ISNUMBER($H5),$H5<0)', text: '#166534' },
+  { background: '#fee2e2', formula: '=AND(ISNUMBER($H5),$H5>0)', text: '#991b1b' },
+];
+
 const styleMonthView = async ({ sheets, sheetId }: { sheetId: number; sheets: SheetsClient }) => {
   const details = await sheets.getSheetDetails(MONTH_VIEW_SHEET);
   const { firstRow, incomeRow, totalRow } = monthViewValues();
@@ -102,6 +108,21 @@ const styleMonthView = async ({ sheets, sheetId }: { sheetId: number; sheets: Sh
   const divider = { color: hexColor('#9ca3af'), style: 'SOLID' };
   await sheets.batchUpdate([
     ...(details?.bandedRangeIds ?? []).map((bandedRangeId) => ({ deleteBanding: { bandedRangeId } })),
+    ...Array.from({ length: details?.conditionalFormatCount ?? 0 }, (_, offset) => ({
+      deleteConditionalFormatRule: { index: (details?.conditionalFormatCount ?? 0) - 1 - offset, sheetId },
+    })),
+    ...MONEY_FLOW_COLORS.map(({ background, formula, text }, index) => ({
+      addConditionalFormatRule: {
+        index,
+        rule: {
+          booleanRule: {
+            condition: { type: 'CUSTOM_FORMULA', values: [{ userEnteredValue: formula }] },
+            format: { backgroundColor: hexColor(background), textFormat: { foregroundColor: hexColor(text) } },
+          },
+          ranges: [{ endColumnIndex: LIST_COLUMNS.end, sheetId, startColumnIndex: LIST_COLUMNS.start, startRowIndex: 4 }],
+        },
+      },
+    })),
     {
       repeatCell: {
         cell: { userEnteredFormat: { textFormat: { fontSize: 10 }, verticalAlignment: 'MIDDLE' } },

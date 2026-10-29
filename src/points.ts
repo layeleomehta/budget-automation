@@ -80,9 +80,13 @@ export const CARD_EARNINGS: CardEarning[] = [
 ];
 
 const EARNS_NOTHING = describes(/ANNUAL MEMBERSHIP FEE|INTEREST CHARGE|LATE FEE|HOTEL CREDIT|GLOBAL ENTRY|TSA ?PRE|NEXUS/);
+const CARD_PAYMENT_OR_RENT = describes(/PAYMENT|AUTOPAY|BILT HOUSING/);
+
+const isMoneyMovement = (row: LedgerRow) =>
+  row.category === INCOME || (row.category === TRANSFER && (row.amount < 0 || CARD_PAYMENT_OR_RENT(row)));
 
 export const earnRate = ({ card, row }: { card: CardEarning; row: LedgerRow }) => {
-  if (row.category === TRANSFER || row.category === INCOME || EARNS_NOTHING(row)) {
+  if (isMoneyMovement(row) || EARNS_NOTHING(row)) {
     return 0;
   }
   const rate = card.rules.find((rule) => rule.matches(row))?.rate ?? card.baseRate;

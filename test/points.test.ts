@@ -38,6 +38,7 @@ describe('earnRate', () => {
     { cardName: 'Chase Sapphire Preferred', expected: 1, input: { category: 'Shopping', description: 'TARGET' }, name: 'Sapphire earns 1x elsewhere' },
     { cardName: 'Chase Sapphire Preferred', expected: 0, input: { category: 'Misc', description: 'ANNUAL MEMBERSHIP FEE' }, name: 'the annual fee earns nothing' },
     { cardName: 'Chase Sapphire Preferred', expected: 0, input: { amount: -500, category: 'Transfer', description: 'Payment Thank You-Mobile' }, name: 'card payments earn nothing' },
+    { cardName: 'Chase Sapphire Preferred', expected: 5, input: { category: 'Transfer', description: 'CL *Chase Travel' }, name: 'an off-budget work trip still earns points' },
     { cardName: 'Chase Freedom Unlimited', expected: 1.5, input: { category: 'Misc', description: 'APPLE.COM/BILL' }, name: 'Freedom earns 1.5x by default' },
     { cardName: 'Chase Freedom Unlimited', expected: 3, input: { category: 'Health', description: 'WALGREENS #1234' }, name: 'Freedom earns 3x at drugstores' },
     { cardName: 'Chase Prime Visa', expected: 5, input: { category: 'Shopping', description: 'AMAZON MKTPL*AB12' }, name: 'Prime Visa earns 5% at Amazon' },

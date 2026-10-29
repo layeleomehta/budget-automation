@@ -53,6 +53,13 @@ describe('planSync', () => {
     expect(plan).toStrictEqual({ deletes: [], inserts: [], updates: [{ rowNumber: 4, transaction: posted }] });
   });
 
+  it('leaves a row alone when only the bank date differs, so manual redates stick', () => {
+    const redated = row({ amount: 2400, date: '2026-11-01', rowNumber: 3, status: 'posted' });
+    const fromBank = transaction({ date: '2026-10-28', id: redated.id, spend: 2400 });
+    const plan = planSync({ added: [], ledger: [redated], modified: [fromBank], removed: [] });
+    expect(plan.updates).toStrictEqual([]);
+  });
+
   it('updates a modified transaction', () => {
     const existing = row({ amount: 20, rowNumber: 6 });
     const changed = transaction({ id: existing.id, spend: 24 });

@@ -101,7 +101,6 @@ export type SyncPlan = {
 
 const rowChanged = ({ row, transaction }: { row: LedgerRow; transaction: NormalizedTransaction }) =>
   row.id !== transaction.id ||
-  row.date !== transaction.date ||
   row.status !== transaction.status ||
   Math.abs(row.amount - transaction.spend) >= 0.005;
 

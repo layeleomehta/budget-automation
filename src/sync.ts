@@ -410,7 +410,6 @@ export const runSync = async (env: Env) => {
 
   await sheets.updateValues({
     data: plan.updates.flatMap(({ rowNumber, transaction }) => [
-      { range: `${TRANSACTIONS_SHEET}!A${rowNumber}`, values: [[isoDateToSerial(transaction.date)]] },
       { range: `${TRANSACTIONS_SHEET}!E${rowNumber}`, values: [[transaction.spend]] },
       { range: `${TRANSACTIONS_SHEET}!H${rowNumber}`, values: [[transaction.status]] },
       { range: `${TRANSACTIONS_SHEET}!K${rowNumber}`, values: [[transaction.id]] },

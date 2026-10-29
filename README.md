@@ -5,6 +5,7 @@ Cloudflare Worker that pulls bank and card transactions from Plaid, categorizes 
 - **Transactions** tab: append-only ledger. Change a row's Category to correct it; the next sync marks it `manual`, clears Review, and adds a merchant rule.
 - **Rules** tab: `Pattern → Category`, case-insensitive substring match, longest pattern wins. Edit freely.
 - **Month View** tab: type a month in `B1` (`2026-10`) to see category totals, income, savings rate, and that month's transactions.
+- **Benefits** tab: card credits and perks from `src/benefits.ts`, rebuilt every sync. Statement credits are matched against the ledger automatically; for perks that leave no transaction, tick **Done** (a monthly tick resets with the month). Amber rows expire within 30 days.
 - Use the **Needs review** filter view on Transactions to triage Venmos and anything the model wasn't sure about.
 
 Amounts are spending-positive: purchases are positive, refunds/reimbursements/paychecks are negative. Categorize an incoming Venmo as whatever it paid back (e.g. Eating Out) and it nets against that category. `Transfer` rows (card payments) are excluded from totals.

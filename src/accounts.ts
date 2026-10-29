@@ -19,6 +19,13 @@ export const parseNicknames = (rows: unknown[][]) => {
   return { known, nicknames };
 };
 
+export const parseAccountInfo = (rows: unknown[][]) =>
+  rows.flatMap(([bankAccount, nickname, productName]) =>
+    typeof bankAccount === 'string' && bankAccount.trim()
+      ? [{ bankAccount, nickname: String(nickname ?? '').trim(), productName: String(productName ?? '').trim() }]
+      : [],
+  );
+
 export const displayAccount = ({ bankAccount, nicknames }: { bankAccount: string; nicknames: Map<string, string> }) =>
   nicknames.get(bankAccount) ?? bankAccount;
 

@@ -1,12 +1,13 @@
 import type { Category } from './categories';
-import { ACCOUNTS_SHEET, displayAccount, parseNicknames, planRelabels } from './accounts';
+import { ACCOUNTS_SHEET, displayAccount, parseAccountInfo, parseNicknames, planRelabels } from './accounts';
+import { BENEFITS, BENEFITS_SHEET, computeBenefits, parseDoneBenefits, toBenefitValues } from './benefits';
 import { type Categorization, categorizeWithLlm, categorizeWithoutLlm, LLM_FAILURE } from './categorize';
 import { createGoogleTokenProvider } from './google-auth';
 import { findCorrections, isoDateToSerial, reapplyRules, LEDGER_HEADERS, parseLedgerRows, planSync, toLedgerValues, TRANSACTIONS_SHEET } from './ledger';
 import { accountLabel, createPlaidClient, type NormalizedTransaction, normalizeTransaction } from './plaid';
 import { parseRules, type Rule } from './rules';
-import { applyFilterOptions, ensureSheetSetup, formatTransactionsSheet, RULES_SHEET } from './sheet-setup';
-import { createSheetsClient } from './sheets';
+import { applyFilterOptions, ensureSheetSetup, formatBenefitsSheet, formatTransactionsSheet, RULES_SHEET, setBenefitsDoneCheckboxes } from './sheet-setup';
+import { createSheetsClient, type SheetsClient } from './sheets';
 
 export type Env = {
   ADMIN_KEY: string;
@@ -118,8 +119,33 @@ const filterOptions = (entries: { account: string; date: string }[]) => ({
     .toReversed(),
 });
 
+const pacificToday = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Los_Angeles' }).format(new Date());
+
+const updateBenefits = async (sheets: SheetsClient) => {
+  const [ledgerValues, accountValues, benefitValues] = await Promise.all([
+    sheets.getValues(`${TRANSACTIONS_SHEET}!A2:L`),
+    sheets.getValues(`${ACCOUNTS_SHEET}!A2:C`),
+    sheets.getValues(`${BENEFITS_SHEET}!A2:K`),
+  ]);
+  const results = computeBenefits({
+    accounts: parseAccountInfo(accountValues),
+    benefits: BENEFITS,
+    done: parseDoneBenefits(benefitValues),
+    ledger: parseLedgerRows(ledgerValues),
+    today: pacificToday(),
+  });
+  await sheets.clearValues(`${BENEFITS_SHEET}!A2:K`);
+  await sheets.updateValues({
+    data: [{ range: `${BENEFITS_SHEET}!A2:K${results.length + 1}`, values: toBenefitValues(results) }],
+    valueInputOption: 'RAW',
+  });
+  await setBenefitsDoneCheckboxes({ rowCount: results.length, sheets });
+  return results;
+};
+
 export const formatSheet = async (env: Env) => {
   const sheets = sheetsClient(env);
+  await formatBenefitsSheet(sheets);
   const result = await formatTransactionsSheet(sheets);
   const sheetId = (await sheets.getSheets()).find((sheet) => sheet.title === TRANSACTIONS_SHEET)?.sheetId;
   await sheets.batchUpdate([newestFirst(sheetId)]);
@@ -399,7 +425,15 @@ export const runSync = async (env: Env) => {
 
   await Promise.all(cursors.map(({ item, nextCursor }) => saveItem({ env, item: { ...item, cursor: nextCursor } })));
 
+  const benefits = await updateBenefits(sheets).catch((error: unknown) => {
+    const message = `Benefits update failed: ${String(error)}`;
+    console.error(message);
+    errors.push(message);
+    return [];
+  });
+
   return {
+    benefitsToUse: benefits.filter((benefit) => benefit.status === 'Unused' || benefit.status === 'Partly used').length,
     corrected: corrections.length,
     recategorized: recategorized.length,
     relabeled: relabels.length,

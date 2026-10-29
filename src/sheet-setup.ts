@@ -1,4 +1,5 @@
 import { ACCOUNTS_HEADERS, ACCOUNTS_SHEET } from './accounts';
+import { BENEFITS_HEADERS, BENEFITS_SHEET } from './benefits';
 import { ALL_CATEGORIES, BUDGET_CATEGORIES, INCOME, UNCATEGORIZED } from './categories';
 import { LEDGER_HEADERS, TRANSACTIONS_SHEET } from './ledger';
 import { SEED_RULES } from './rules';
@@ -737,9 +738,108 @@ export const formatTransactionsSheet = async (sheets: SheetsClient) => {
   return { formatted: true };
 };
 
+const BENEFITS_COLUMN_WIDTHS = [200, 280, 80, 190, 120, 80, 80, 90, 100, 60, 560];
+const BENEFITS_COLUMNS = { daysLeft: 5, done: 9, howToRedeem: 10, resetsOn: 4 };
+
+export const formatBenefitsSheet = async (sheets: SheetsClient) => {
+  const details = await sheets.getSheetDetails(BENEFITS_SHEET);
+  if (!details) {
+    return { formatted: false };
+  }
+  const { bandedRangeIds, conditionalFormatCount, sheetId } = details;
+  const statusHighlight = ({ background, formula, textColor }: { background?: string; formula: string; textColor?: string }) => ({
+    addConditionalFormatRule: {
+      index: 0,
+      rule: {
+        booleanRule: {
+          condition: { type: 'CUSTOM_FORMULA', values: [{ userEnteredValue: formula }] },
+          format: {
+            ...(background ? { backgroundColor: hexColor(background) } : {}),
+            ...(textColor ? { textFormat: { foregroundColor: hexColor(textColor) } } : {}),
+          },
+        },
+        ranges: [{ endColumnIndex: BENEFITS_HEADERS.length, sheetId, startColumnIndex: 0, startRowIndex: 1 }],
+      },
+    },
+  });
+
+  await sheets.updateValues({
+    data: [{ range: `${BENEFITS_SHEET}!A1:K1`, values: [[...BENEFITS_HEADERS]] }],
+    valueInputOption: 'RAW',
+  });
+  await sheets.batchUpdate([
+    ...bandedRangeIds.map((bandedRangeId) => ({ deleteBanding: { bandedRangeId } })),
+    ...Array.from({ length: conditionalFormatCount }, (_, offset) => ({
+      deleteConditionalFormatRule: { index: conditionalFormatCount - 1 - offset, sheetId },
+    })),
+    ...[2, 6, 7].map((column) =>
+      numberFormat({ endColumn: column + 1, pattern: CURRENCY, sheetId, startColumn: column, startRow: 1, type: 'CURRENCY' }),
+    ),
+    numberFormat({
+      endColumn: BENEFITS_COLUMNS.resetsOn + 1,
+      pattern: FRIENDLY_DATE,
+      sheetId,
+      startColumn: BENEFITS_COLUMNS.resetsOn,
+      startRow: 1,
+      type: 'DATE',
+    }),
+    ...BENEFITS_COLUMN_WIDTHS.map((pixelSize, index) => ({
+      updateDimensionProperties: {
+        fields: 'pixelSize',
+        properties: { pixelSize },
+        range: { dimension: 'COLUMNS', endIndex: index + 1, sheetId, startIndex: index },
+      },
+    })),
+    {
+      repeatCell: {
+        cell: { userEnteredFormat: { textFormat: { bold: true }, verticalAlignment: 'MIDDLE' } },
+        fields: 'userEnteredFormat(textFormat.bold,verticalAlignment)',
+        range: { endRowIndex: 1, sheetId, startRowIndex: 0 },
+      },
+    },
+    ...[BENEFITS_COLUMNS.daysLeft, BENEFITS_COLUMNS.done].map((column) => ({
+      repeatCell: {
+        cell: { userEnteredFormat: { horizontalAlignment: 'CENTER' } },
+        fields: 'userEnteredFormat.horizontalAlignment',
+        range: { endColumnIndex: column + 1, sheetId, startColumnIndex: column, startRowIndex: 1 },
+      },
+    })),
+    {
+      addBanding: {
+        bandedRange: {
+          range: { endColumnIndex: BENEFITS_HEADERS.length, sheetId, startColumnIndex: 0, startRowIndex: 0 },
+          rowProperties: {
+            firstBandColor: hexColor('#ffffff'),
+            headerColor: hexColor('#e5e7eb'),
+            secondBandColor: hexColor('#f8fafc'),
+          },
+        },
+      },
+    },
+    statusHighlight({ formula: '=$I2="Missed"', textColor: '#9ca3af' }),
+    statusHighlight({ background: '#fef3c7', formula: '=AND(OR($I2="Unused",$I2="Partly used"),ISNUMBER($F2),$F2<=30)' }),
+    statusHighlight({ background: '#dcfce7', formula: '=$I2="Used"', textColor: '#166534' }),
+  ]);
+  return { formatted: true };
+};
+
+export const setBenefitsDoneCheckboxes = async ({ rowCount, sheets }: { rowCount: number; sheets: SheetsClient }) => {
+  const sheetId = (await sheets.getSheets()).find((sheet) => sheet.title === BENEFITS_SHEET)?.sheetId;
+  if (sheetId === undefined) {
+    return;
+  }
+  const doneColumn = { endColumnIndex: BENEFITS_COLUMNS.done + 1, sheetId, startColumnIndex: BENEFITS_COLUMNS.done };
+  await sheets.batchUpdate([
+    { setDataValidation: { range: { ...doneColumn, startRowIndex: 1 } } },
+    ...(rowCount === 0
+      ? []
+      : [{ setDataValidation: { range: { ...doneColumn, endRowIndex: rowCount + 1, startRowIndex: 1 }, rule: { condition: { type: 'BOOLEAN' } } } }]),
+  ]);
+};
+
 export const ensureSheetSetup = async (sheets: SheetsClient) => {
   const existing = new Set((await sheets.getSheets()).map((sheet) => sheet.title));
-  const missing = [TRANSACTIONS_SHEET, RULES_SHEET, MONTH_VIEW_SHEET, ACCOUNTS_SHEET].filter((title) => !existing.has(title));
+  const missing = [TRANSACTIONS_SHEET, RULES_SHEET, MONTH_VIEW_SHEET, ACCOUNTS_SHEET, BENEFITS_SHEET].filter((title) => !existing.has(title));
   if (existing.has(TRANSACTIONS_SHEET)) {
     await sheets.updateValues({
       data: [{ range: `${TRANSACTIONS_SHEET}!A1:L1`, values: [[...LEDGER_HEADERS]] }],
@@ -814,6 +914,10 @@ export const ensureSheetSetup = async (sheets: SheetsClient) => {
         },
       })),
     ]);
+  }
+
+  if (created.has(BENEFITS_SHEET)) {
+    await formatBenefitsSheet(sheets);
   }
 
   if (created.has(RULES_SHEET)) {

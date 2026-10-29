@@ -1,12 +1,23 @@
 import type { Category } from './categories';
 import { ACCOUNTS_SHEET, displayAccount, parseAccountInfo, parseNicknames, planRelabels } from './accounts';
-import { BENEFITS, BENEFITS_SHEET, computeBenefits, parseDoneBenefits, toBenefitValues } from './benefits';
+import { BENEFITS, BENEFITS_SHEET, CARD_PERKS, computeBenefits, linkedPerks, parseDoneBenefits, toBenefitValues } from './benefits';
 import { type Categorization, categorizeWithLlm, categorizeWithoutLlm, LLM_FAILURE } from './categorize';
 import { createGoogleTokenProvider } from './google-auth';
 import { findCorrections, isoDateToSerial, reapplyRules, LEDGER_HEADERS, parseLedgerRows, planSync, toLedgerValues, TRANSACTIONS_SHEET } from './ledger';
 import { accountLabel, createPlaidClient, type NormalizedTransaction, normalizeTransaction } from './plaid';
 import { parseRules, type Rule } from './rules';
-import { applyFilterOptions, ensureSheetSetup, formatBenefitsSheet, formatTransactionsSheet, RULES_SHEET, setBenefitsDoneCheckboxes } from './sheet-setup';
+import {
+  applyFilterOptions,
+  BENEFITS_PERKS_HEADERS,
+  BENEFITS_PERKS_TITLE,
+  ensureSheetSetup,
+  formatBenefitsSheet,
+  formatTransactionsSheet,
+  layOutBenefitPerks,
+  resetBenefitsBody,
+  RULES_SHEET,
+  setBenefitsDoneCheckboxes,
+} from './sheet-setup';
 import { createSheetsClient, type SheetsClient } from './sheets';
 
 export type Env = {
@@ -127,18 +138,28 @@ const updateBenefits = async (sheets: SheetsClient) => {
     sheets.getValues(`${ACCOUNTS_SHEET}!A2:C`),
     sheets.getValues(`${BENEFITS_SHEET}!A2:K`),
   ]);
+  const accounts = parseAccountInfo(accountValues);
   const results = computeBenefits({
-    accounts: parseAccountInfo(accountValues),
+    accounts,
     benefits: BENEFITS,
     done: parseDoneBenefits(benefitValues),
     ledger: parseLedgerRows(ledgerValues),
     today: pacificToday(),
   });
-  await sheets.clearValues(`${BENEFITS_SHEET}!A2:K`);
+  const perks = linkedPerks({ accounts, perks: CARD_PERKS });
+  const perksTitleRow = results.length + 3;
+  await resetBenefitsBody(sheets);
   await sheets.updateValues({
-    data: [{ range: `${BENEFITS_SHEET}!A2:K${results.length + 1}`, values: toBenefitValues(results) }],
+    data: [
+      { range: `${BENEFITS_SHEET}!A2:K${results.length + 1}`, values: toBenefitValues(results) },
+      {
+        range: `${BENEFITS_SHEET}!A${perksTitleRow}:C${perksTitleRow + perks.length + 1}`,
+        values: [[BENEFITS_PERKS_TITLE], [...BENEFITS_PERKS_HEADERS], ...perks],
+      },
+    ],
     valueInputOption: 'RAW',
   });
+  await layOutBenefitPerks({ perkCount: perks.length, sheets, titleRow: perksTitleRow });
   await setBenefitsDoneCheckboxes({ rowCount: results.length, sheets });
   return results;
 };

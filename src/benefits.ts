@@ -92,6 +92,43 @@ export const BENEFITS: Benefit[] = [
   },
 ];
 
+export type CardPerk = { cardName: string; cardPattern: RegExp; howToUse: string; perk: string };
+
+const FREEDOM_UNLIMITED = { cardName: 'Chase Freedom Unlimited', cardPattern: /FREEDOM UNLIMITED/i };
+const PRIME_VISA = { cardName: 'Chase Prime Visa', cardPattern: /PRIME VISA/i };
+const BILT_BLUE = { cardName: 'Bilt Blue', cardPattern: /BILT/i };
+
+export const CARD_PERKS: CardPerk[] = [
+  { ...SAPPHIRE_PREFERRED, howToUse: 'Restaurants, gas and EV charging, streaming, and online groceries (not Walmart, Target or wholesale clubs).', perk: '3x points on dining, gas, streaming, online groceries' },
+  { ...SAPPHIRE_PREFERRED, howToUse: 'Pay for Lyft rides with the Sapphire.', perk: '5x points on Lyft' },
+  { ...SAPPHIRE_PREFERRED, howToUse: 'Book flights, hotels and rental cars through Chase Travel. Other travel earns 2x.', perk: '5x points on Chase Travel' },
+  { ...SAPPHIRE_PREFERRED, howToUse: "Pay for the rental with the Sapphire and decline the rental company's collision coverage.", perk: 'Primary rental car insurance' },
+  { ...SAPPHIRE_PREFERRED, howToUse: 'Pay for the trip with the Sapphire to be covered for trip cancellation, trip delay and baggage delay.', perk: 'Travel protections' },
+  { ...SAPPHIRE_PREFERRED, howToUse: 'Move points to airline and hotel partners when that beats the Chase Travel price.', perk: 'Point transfers to airlines and hotels' },
+  { ...SAPPHIRE_PREFERRED, howToUse: 'Buy electronics and other expensive items with the Sapphire.', perk: 'Purchase protection and extended warranty' },
+  { ...SAPPHIRE_PREFERRED, howToUse: 'Use it abroad.', perk: 'No foreign transaction fees' },
+  { ...FREEDOM_UNLIMITED, howToUse: "Default card for anything outside the Sapphire's 3x categories and Amazon.", perk: '1.5x on everything, 3x on dining and drugstores' },
+  { ...FREEDOM_UNLIMITED, howToUse: 'Combine Freedom points into the Sapphire account so they can be transferred to partners.', perk: 'Points pool with the Sapphire' },
+  { ...PRIME_VISA, howToUse: 'All Amazon and Whole Foods purchases, including the Prime membership.', perk: '5% back at Amazon and Whole Foods' },
+  { ...PRIME_VISA, howToUse: 'Restaurants, gas stations and local transit.', perk: '2% back on dining, gas and transit' },
+  { ...BILT_BLUE, howToUse: 'Pay rent through Bilt to earn points on it.', perk: 'Points on rent' },
+  { ...BILT_BLUE, howToUse: 'Put big purchases on the 1st of the month (through Jan 1, 2027).', perk: 'Double points on the 1st' },
+  { ...BILT_BLUE, howToUse: 'Eat at Bilt dining partners (listed in the Bilt app) and pay with the Bilt card.', perk: '4x at Bilt dining partners' },
+  { ...BILT_BLUE, howToUse: 'Pay your monthly phone bill with the Bilt card.', perk: 'Cell phone protection' },
+  { ...BILT_BLUE, howToUse: 'Use it abroad.', perk: 'No foreign transaction fees' },
+];
+
+const matchingAccounts = ({ accounts, cardPattern }: { accounts: AccountInfo[]; cardPattern: RegExp }) =>
+  accounts.filter((account) => cardPattern.test(`${account.bankAccount} ${account.nickname} ${account.productName}`));
+
+export const linkedPerks = ({ accounts, perks }: { accounts: AccountInfo[]; perks: CardPerk[] }) =>
+  perks.flatMap((perk) => {
+    const cardAccounts = matchingAccounts({ accounts, cardPattern: perk.cardPattern });
+    return cardAccounts.length === 0
+      ? []
+      : [[cardAccounts.find((account) => account.nickname)?.nickname ?? perk.cardName, perk.perk, perk.howToUse]];
+  });
+
 const DAY_MS = 86_400_000;
 
 const addYears = ({ isoDate, years }: { isoDate: string; years: number }) =>
@@ -159,9 +196,7 @@ export const computeBenefits = ({
   today: string;
 }): BenefitResult[] => {
   const results = benefits.flatMap((benefit) => {
-    const cardAccounts = accounts.filter((account) =>
-      benefit.cardPattern.test(`${account.bankAccount} ${account.nickname} ${account.productName}`),
-    );
+    const cardAccounts = matchingAccounts({ accounts, cardPattern: benefit.cardPattern });
     const cardBankAccounts = new Set(cardAccounts.map((account) => account.bankAccount));
     const cardRows = ledger.filter((row) => cardBankAccounts.has(row.bankAccount) || benefit.cardPattern.test(row.account));
     if (cardAccounts.length === 0 && cardRows.length === 0) {

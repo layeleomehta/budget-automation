@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { type AccountInfo, BENEFITS, benefitKey, computeBenefits, parseDoneBenefits } from '../src/benefits';
+import { type AccountInfo, BENEFITS, benefitKey, CARD_PERKS, computeBenefits, linkedPerks, parseDoneBenefits } from '../src/benefits';
 import type { LedgerRow } from '../src/ledger';
 
 const SAPPHIRE: AccountInfo = { bankAccount: 'Chase CREDIT CARD ••9944', nickname: 'Sapphire', productName: 'Chase Sapphire Preferred' };
@@ -148,5 +148,18 @@ describe('parseDoneBenefits', () => {
         ['Sapphire', 'Apple TV (1 year)', 180, 'One-time', '', '', 0, 180, 'Unused', false, ''],
       ]),
     ]).toStrictEqual([benefitKey({ name: '$10 DoorDash promo', periodLabel: '2026-10' })]);
+  });
+});
+
+describe('linkedPerks', () => {
+  it('lists perks only for linked cards, under their nicknames', () => {
+    const perks = linkedPerks({
+      accounts: [{ bankAccount: 'Chase CREDIT CARD ••2404', nickname: 'Amazon card', productName: 'Prime Visa' }],
+      perks: CARD_PERKS,
+    });
+    expect(perks.map(([card, perk]) => [card, perk])).toStrictEqual([
+      ['Amazon card', '5% back at Amazon and Whole Foods'],
+      ['Amazon card', '2% back on dining, gas and transit'],
+    ]);
   });
 });

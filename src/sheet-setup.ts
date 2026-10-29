@@ -837,6 +837,72 @@ export const setBenefitsDoneCheckboxes = async ({ rowCount, sheets }: { rowCount
   ]);
 };
 
+export const BENEFITS_PERKS_TITLE = 'Card perks';
+export const BENEFITS_PERKS_HEADERS = ['Card', 'Perk', 'How to use it'] as const;
+
+export const layOutBenefitPerks = async ({
+  perkCount,
+  sheets,
+  titleRow,
+}: {
+  perkCount: number;
+  sheets: SheetsClient;
+  titleRow: number;
+}) => {
+  const sheetId = (await sheets.getSheets()).find((sheet) => sheet.title === BENEFITS_SHEET)?.sheetId;
+  if (sheetId === undefined) {
+    return;
+  }
+  const headerIndex = titleRow;
+  await sheets.batchUpdate([
+    {
+      repeatCell: {
+        cell: { userEnteredFormat: { textFormat: { bold: true, fontSize: 12 } } },
+        fields: 'userEnteredFormat(textFormat.bold,textFormat.fontSize)',
+        range: { endRowIndex: titleRow, sheetId, startRowIndex: titleRow - 1 },
+      },
+    },
+    {
+      repeatCell: {
+        cell: { userEnteredFormat: { backgroundColor: hexColor('#e5e7eb'), textFormat: { bold: true } } },
+        fields: 'userEnteredFormat(backgroundColor,textFormat.bold)',
+        range: { endColumnIndex: BENEFITS_HEADERS.length, endRowIndex: headerIndex + 1, sheetId, startColumnIndex: 0, startRowIndex: headerIndex },
+      },
+    },
+    {
+      mergeCells: {
+        mergeType: 'MERGE_ROWS',
+        range: {
+          endColumnIndex: BENEFITS_HEADERS.length,
+          endRowIndex: headerIndex + 1 + perkCount,
+          sheetId,
+          startColumnIndex: 2,
+          startRowIndex: headerIndex,
+        },
+      },
+    },
+  ]);
+};
+
+export const resetBenefitsBody = async (sheets: SheetsClient) => {
+  const sheetId = (await sheets.getSheets()).find((sheet) => sheet.title === BENEFITS_SHEET)?.sheetId;
+  if (sheetId === undefined) {
+    return;
+  }
+  const body = { endColumnIndex: BENEFITS_HEADERS.length, sheetId, startColumnIndex: 0, startRowIndex: 1 };
+  await sheets.batchUpdate([
+    { unmergeCells: { range: body } },
+    {
+      repeatCell: {
+        cell: { userEnteredFormat: {} },
+        fields: 'userEnteredFormat(backgroundColor,textFormat.bold,textFormat.fontSize)',
+        range: body,
+      },
+    },
+  ]);
+  await sheets.clearValues(`${BENEFITS_SHEET}!A2:K`);
+};
+
 export const ensureSheetSetup = async (sheets: SheetsClient) => {
   const existing = new Set((await sheets.getSheets()).map((sheet) => sheet.title));
   const missing = [TRANSACTIONS_SHEET, RULES_SHEET, MONTH_VIEW_SHEET, ACCOUNTS_SHEET, BENEFITS_SHEET].filter((title) => !existing.has(title));

@@ -35,6 +35,7 @@ describe('earnRate', () => {
     { cardName: 'Chase Sapphire Preferred', expected: 5, input: { category: 'Transportation', description: 'Lyft' }, name: 'Sapphire earns 5x on Lyft' },
     { cardName: 'Chase Sapphire Preferred', expected: 2, input: { category: 'Transportation', description: 'CLIPPER TRANSIT FARE' }, name: 'Sapphire earns 2x on transit' },
     { cardName: 'Chase Sapphire Preferred', expected: 3, input: { category: 'Transportation', description: 'TESLA, INC.' }, name: 'Sapphire earns 3x on EV charging' },
+    { cardName: 'Chase Sapphire Preferred', expected: 1, input: { category: 'Phone Plan', description: 'MINT MOBILE' }, name: 'a phone bill is not gas' },
     { cardName: 'Chase Sapphire Preferred', expected: 1, input: { category: 'Shopping', description: 'TARGET' }, name: 'Sapphire earns 1x elsewhere' },
     { cardName: 'Chase Sapphire Preferred', expected: 0, input: { category: 'Misc', description: 'ANNUAL MEMBERSHIP FEE' }, name: 'the annual fee earns nothing' },
     { cardName: 'Chase Sapphire Preferred', expected: 0, input: { amount: -500, category: 'Transfer', description: 'Payment Thank You-Mobile' }, name: 'card payments earn nothing' },

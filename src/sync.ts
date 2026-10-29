@@ -186,6 +186,8 @@ export const formatSheet = async (env: Env) => {
   return result;
 };
 
+export const readRange = ({ env, range }: { env: Env; range: string }) => sheetsClient(env).getValues(range);
+
 export const addRules = async ({ env, rules }: { env: Env; rules: Rule[] }) => {
   const sheets = sheetsClient(env);
   const existing = new Set(parseRules(await sheets.getValues(`${RULES_SHEET}!A2:B`)).map((rule) => rule.pattern.toUpperCase()));

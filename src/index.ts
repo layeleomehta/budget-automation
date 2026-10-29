@@ -1,7 +1,7 @@
 import { renderLinkPage } from './link-page';
 import { type Category, isCategory } from './categories';
 import { parseRules } from './rules';
-import { addManualTransaction, addRules, type Env, formatSheet, listReview, setCategory, getItem, listItems, monthBreakdown, plaidClient, redateTransactions, resetLedger, runSync, saveItem } from './sync';
+import { addManualTransaction, addRules, readRange, type Env, formatSheet, listReview, setCategory, getItem, listItems, monthBreakdown, plaidClient, redateTransactions, resetLedger, runSync, saveItem } from './sync';
 
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body, null, 2), { headers: { 'Content-Type': 'application/json' }, status });
@@ -125,6 +125,14 @@ export default {
         return json({ error: 'Expected month=YYYY-MM' }, 400);
       }
       return json(await monthBreakdown({ env, month }));
+    }
+
+    if (route === 'GET /values') {
+      const range = url.searchParams.get('range');
+      if (!range) {
+        return json({ error: 'Expected range, e.g. 2025!A1:N40' }, 400);
+      }
+      return json(await readRange({ env, range }));
     }
 
     if (route === 'POST /redate') {

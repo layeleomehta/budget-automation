@@ -67,6 +67,25 @@ describe('planSync', () => {
     expect(plan.updates).toStrictEqual([{ rowNumber: 6, transaction: changed }]);
   });
 
+  it('deletes extra rows written twice for one transaction and updates the first', () => {
+    const first = row({ amount: -5254.73, rowNumber: 3, status: 'pending' });
+    const copy = row({ amount: -5254.73, id: first.id, rowNumber: 4, status: 'pending' });
+    const posted = transaction({ id: crypto.randomUUID(), pendingTransactionId: first.id, spend: -5254.73 });
+    const plan = planSync({ added: [posted], ledger: [first, copy], modified: [], removed: [first.id] });
+    expect(plan).toStrictEqual({ deletes: [4], inserts: [], updates: [{ rowNumber: 3, transaction: posted }] });
+  });
+
+  it('removes a duplicate even when Plaid reports no changes', () => {
+    const first = row({ rowNumber: 2 });
+    const plan = planSync({
+      added: [],
+      ledger: [first, row({ id: first.id, rowNumber: 5 }), row({ id: first.id, rowNumber: 9 })],
+      modified: [],
+      removed: [],
+    });
+    expect(plan.deletes).toStrictEqual([5, 9]);
+  });
+
   it.each<{ name: string; ledgerIds: string[]; removed: string[]; expected: number[] }>([
     { expected: [7], ledgerIds: ['gone'], name: 'deletes a removed transaction', removed: ['gone'] },
     { expected: [], ledgerIds: [], name: 'ignores removals for rows it never wrote', removed: ['unknown'] },

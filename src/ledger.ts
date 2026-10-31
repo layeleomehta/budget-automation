@@ -115,7 +115,15 @@ export const planSync = ({
   modified: NormalizedTransaction[];
   removed: string[];
 }): SyncPlan => {
-  const ledgerById = new Map(ledger.map((row) => [row.id, row]));
+  const ledgerById = new Map<string, LedgerRow>();
+  const duplicateRows: number[] = [];
+  for (const row of ledger) {
+    if (ledgerById.has(row.id)) {
+      duplicateRows.push(row.rowNumber);
+    } else {
+      ledgerById.set(row.id, row);
+    }
+  }
   const incoming = new Map([...added, ...modified].map((transaction) => [transaction.id, transaction]));
   const replacedPendingIds = new Set<string>();
   const plan: SyncPlan = { deletes: [], inserts: [], updates: [] };
@@ -136,10 +144,13 @@ export const planSync = ({
     }
   }
 
-  plan.deletes = removed.flatMap((id) => {
-    const row = ledgerById.get(id);
-    return row && !replacedPendingIds.has(id) ? [row.rowNumber] : [];
-  });
+  plan.deletes = [
+    ...duplicateRows,
+    ...removed.flatMap((id) => {
+      const row = ledgerById.get(id);
+      return row && !replacedPendingIds.has(id) ? [row.rowNumber] : [];
+    }),
+  ];
 
   return plan;
 };
